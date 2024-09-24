@@ -3,27 +3,23 @@
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QGridLayout, QShortcut, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QTableWidget, QTableWidgetItem, QHeaderView,
-    QListWidgetItem, QColorDialog, QFileDialog
+    QListWidgetItem, QColorDialog, QFileDialog, QTabWidget
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QKeySequence
 import os
 import numpy as np
 
-from gui.panels import (
-    SelectedDataPanel, AxisDetailsPanel, AdditionalTextPanel,
-    CustomAnnotationsPanel, PlotVisualsPanel, PlotDetailsPanel
-)
+from gui.tabs import GeneralTab, NormalizationTab
 from plots.plotting import plot_data
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
 import pandas as pd
 
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Data Viz Pro - version 1.5")
+        self.setWindowTitle("Data Viz Pro - version 2.1.1")
         self.setGeometry(100, 100, 1200, 800)
 
         self.last_directory = os.path.expanduser("~")
@@ -41,27 +37,20 @@ class MainWindow(QMainWindow):
 
         self.main_layout = QGridLayout(self.central_widget)
 
-        # Instantiate panels
-        self.selected_data_panel = SelectedDataPanel()
-        self.axis_details_panel = AxisDetailsPanel()
-        self.additional_text_panel = AdditionalTextPanel()
-        self.custom_annotations_panel = CustomAnnotationsPanel()
-        self.plot_visuals_panel = PlotVisualsPanel()
-        self.plot_details_panel = PlotDetailsPanel()
+        # Create Tab Widget
+        self.tabs = QTabWidget()
+        self.general_tab = GeneralTab()
+        self.normalization_tab = NormalizationTab()
+
+        self.tabs.addTab(self.general_tab, "General")
+        self.tabs.addTab(self.normalization_tab, "Normalization")
 
         # Plot area
         self.figure = plt.figure()
         self.canvas = FigureCanvas(self.figure)
         self.toolbar = NavigationToolbar(self.canvas, self)
 
-        # Layout arrangement
-        self.main_layout.addWidget(self.selected_data_panel, 0, 0)
-        self.main_layout.addWidget(self.axis_details_panel, 0, 1)
-        self.main_layout.addWidget(self.plot_details_panel, 1, 0)
-        self.main_layout.addWidget(self.plot_visuals_panel, 1, 1)
-        self.main_layout.addWidget(self.custom_annotations_panel, 2, 0)
-        self.main_layout.addWidget(self.additional_text_panel, 2, 1)
-
+        # Plot area layout
         plot_layout = QVBoxLayout()
         plot_layout.addWidget(self.toolbar)
         plot_layout.addWidget(self.canvas)
@@ -92,11 +81,34 @@ class MainWindow(QMainWindow):
         plot_widget = QWidget()
         plot_widget.setLayout(plot_layout)
 
-        self.main_layout.addWidget(plot_widget, 0, 2, 3, 1)
+        # Add widgets to the main layout
+        self.main_layout.addWidget(self.tabs, 0, 0)
+        self.main_layout.addWidget(plot_widget, 0, 1)
 
-        self.main_layout.setColumnStretch(0, 1)
-        self.main_layout.setColumnStretch(1, 1)
-        self.main_layout.setColumnStretch(2, 3)
+        self.main_layout.setColumnStretch(0, 2)
+        self.main_layout.setColumnStretch(1, 3)
+
+        # Connect signals and slots from the general tab panels
+        self.connect_signals()
+
+        # Delete shortcut
+        delete_shortcut = QShortcut(QKeySequence("Delete"), self)
+        delete_shortcut.activated.connect(self.delete_selected_file)
+
+        # Connect the canvas to the event handler
+        self.canvas.mpl_connect('button_press_event', self.on_click)
+        self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
+
+    def connect_signals(self):
+        # Access panels from the general tab
+        general_tab = self.general_tab
+
+        self.selected_data_panel = general_tab.selected_data_panel
+        self.axis_details_panel = general_tab.axis_details_panel
+        self.additional_text_panel = general_tab.additional_text_panel
+        self.custom_annotations_panel = general_tab.custom_annotations_panel
+        self.plot_visuals_panel = general_tab.plot_visuals_panel
+        self.plot_details_panel = general_tab.plot_details_panel
 
         # Connect signals and slots
         self.selected_data_panel.file_selector_button.clicked.connect(self.choose_files)
@@ -108,13 +120,7 @@ class MainWindow(QMainWindow):
         self.custom_annotations_panel.apply_changes_button.clicked.connect(self.apply_changes)
         self.custom_annotations_panel.calculate_distance_button.clicked.connect(self.start_distance_calculation)
 
-        # Delete shortcut
-        delete_shortcut = QShortcut(QKeySequence("Delete"), self)
-        delete_shortcut.activated.connect(self.delete_selected_file)
-
-        # Connect the canvas to the event handler
-        self.canvas.mpl_connect('button_press_event', self.on_click)
-        self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
+    # The following methods are updated to reference the panels via self.<panel_name>
 
     def choose_files(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Select Files", self.last_directory, "All Files (*)")
@@ -148,6 +154,13 @@ class MainWindow(QMainWindow):
             item.setCheckState(Qt.Checked if select_all else Qt.Unchecked)
         self.selected_data_panel.select_all_button.setText("Deselect All" if select_all else "Select All")
 
+    def delete_selected_file(self):
+        selected_items = self.selected_data_panel.selected_files_list.selectedItems()
+        if not selected_items:
+            return
+        for item in selected_items:
+            self.selected_data_panel.selected_files_list.takeItem(self.selected_data_panel.selected_files_list.row(item))
+
     def choose_text_color(self):
         color = QColorDialog.getColor()
         if color.isValid():
@@ -173,13 +186,6 @@ class MainWindow(QMainWindow):
             text_item = self.text_items.pop()  # Remove the last added text item
             text_item.remove()  # Remove it from the plot
             self.canvas.draw_idle()
-
-    def delete_selected_file(self):
-        selected_items = self.selected_data_panel.selected_files_list.selectedItems()
-        if not selected_items:
-            return
-        for item in selected_items:
-            self.selected_data_panel.selected_files_list.takeItem(self.selected_data_panel.selected_files_list.row(item))
 
     def update_plot(self):
         # Gather all parameters from panels
@@ -391,15 +397,3 @@ class MainWindow(QMainWindow):
 
         self.selected_lines.clear()
         self.canvas.draw_idle()
-
-if __name__ == "__main__":
-    import sys
-    from PyQt5.QtWidgets import QApplication, QFileDialog
-    import numpy as np
-
-    app = QApplication(sys.argv)
-
-    window = MainWindow()
-    window.show()
-
-    sys.exit(app.exec_())

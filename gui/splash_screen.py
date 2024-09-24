@@ -26,7 +26,7 @@ class SplashScreen(QWidget):
         self.layout.addWidget(self.progress_bar)
 
         # Add QLabel for the main text
-        self.main_text_label = QLabel("Data Viz Pro (version 1.5)", self)
+        self.main_text_label = QLabel("Data Viz Pro (version 2.1.1)", self)
         self.main_text_label.setFont(QFont("Arial", 16))
         self.main_text_label.setAlignment(Qt.AlignCenter)
         self.layout.addWidget(self.main_text_label)

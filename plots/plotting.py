@@ -85,7 +85,7 @@ def plot_data(figure, data_files, plot_details, axis_details, plot_visuals, is_3
                 ax.pie(y, labels=x)
 
     # Set axis labels and title
-    ax.set_title(axis_details['title'], fontsize=axis_details['title_font_size'])
+    ax.set_title(axis_details['title'], fontsize=axis_details['title_font_size'], pad=20)
     ax.set_xlabel(axis_details['x_label'], fontsize=axis_details['axis_font_size'])
     if is_3d:
         ax.set_ylabel('Offset', fontsize=axis_details['axis_font_size'])

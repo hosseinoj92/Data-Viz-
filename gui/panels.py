@@ -4,30 +4,47 @@ import os
 from PyQt5.QtWidgets import (
     QGroupBox, QVBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
     QListWidget, QScrollArea, QCheckBox, QSpinBox, QComboBox, QHBoxLayout,
-    QListWidgetItem, QColorDialog, QWidget
+    QListWidgetItem, QColorDialog
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
+
+# gui/panels.py
 
 class DraggableListWidget(QListWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
+        self.setDragEnabled(True)  # Enable dragging
         self.setSelectionMode(QListWidget.MultiSelection)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
-            event.acceptProposedAction()
+            event.acceptProposedAction()  # Accept the event if it has URLs
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()  # Accept the event
+        else:
+            event.ignore()
 
     def dropEvent(self, event):
-        for url in event.mimeData().urls():
-            file_path = url.toLocalFile()
-            file_name = os.path.basename(file_path)
-            item = QListWidgetItem(file_name)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Unchecked)
-            item.setData(Qt.UserRole, file_path)
-            self.addItem(item)
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                if os.path.isfile(file_path):  # Ensure it's a file
+                    file_name = os.path.basename(file_path)
+                    item = QListWidgetItem(file_name)
+                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                    item.setCheckState(Qt.Unchecked)
+                    item.setData(Qt.UserRole, file_path)
+                    self.addItem(item)
+        else:
+            event.ignore()
+
 
 class SelectedDataPanel(QGroupBox):
     def __init__(self, parent=None):

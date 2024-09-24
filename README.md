@@ -4,7 +4,7 @@
 
 
 ## Overview
-Data Viz Pro is a Python-based tool for data visualization and interactive plotting. Built using PyQt5 and Matplotlib, it allows users to create 2D and 3D plots with customizable options like plot style, axis details, grid settings, and more. The tool supports various plot types including line, scatter, bar, histogram, and pie charts.
+Data Viz Pro is a free Python-based tool for fast data visualization and interactive plotting. Built using PyQt5 and Matplotlib, it allows users to create 2D and 3D plots with customizable options like plot style, axis details, grid settings, and more. The tool supports various plot types including line, scatter, bar, histogram, and pie charts. If you like using it, please feel free to recommend it to others!
 
 
 ## Features
