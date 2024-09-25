@@ -14,6 +14,8 @@ class GeneralTab(QWidget):
 
     def init_ui(self):
         self.layout = QGridLayout()
+        self.layout.setContentsMargins(10, 10, 10, 10)
+        self.layout.setSpacing(10)
         self.setLayout(self.layout)
 
         # Instantiate panels
@@ -42,6 +44,8 @@ class NormalizationTab(QWidget):
 
     def init_ui(self):
         self.layout = QVBoxLayout()
+        self.layout.setContentsMargins(10, 10, 10, 10)
+        self.layout.setSpacing(10)
         self.setLayout(self.layout)
 
         # Placeholder content for the Normalization tab

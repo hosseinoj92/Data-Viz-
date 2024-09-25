@@ -7,26 +7,23 @@ from PyQt5.QtWidgets import (
     QListWidgetItem, QColorDialog
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
-
-# gui/panels.py
 
 class DraggableListWidget(QListWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
-        self.setDragEnabled(True)  # Enable dragging
+        self.setDragEnabled(True)
         self.setSelectionMode(QListWidget.MultiSelection)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
-            event.acceptProposedAction()  # Accept the event if it has URLs
+            event.acceptProposedAction()
         else:
             event.ignore()
 
     def dragMoveEvent(self, event):
         if event.mimeData().hasUrls():
-            event.acceptProposedAction()  # Accept the event
+            event.acceptProposedAction()
         else:
             event.ignore()
 
@@ -35,7 +32,7 @@ class DraggableListWidget(QListWidget):
             event.acceptProposedAction()
             for url in event.mimeData().urls():
                 file_path = url.toLocalFile()
-                if os.path.isfile(file_path):  # Ensure it's a file
+                if os.path.isfile(file_path):
                     file_name = os.path.basename(file_path)
                     item = QListWidgetItem(file_name)
                     item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
@@ -44,7 +41,6 @@ class DraggableListWidget(QListWidget):
                     self.addItem(item)
         else:
             event.ignore()
-
 
 class SelectedDataPanel(QGroupBox):
     def __init__(self, parent=None):

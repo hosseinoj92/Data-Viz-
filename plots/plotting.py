@@ -8,6 +8,9 @@ def plot_data(figure, data_files, plot_details, axis_details, plot_visuals, is_3
     # Clear the figure
     figure.clear()
 
+    # Remove the background color settings to keep the plot area white
+    # figure.patch.set_facecolor(bg_color)
+
     # Apply plot style
     plot_style = plot_visuals['plot_style'].lower()
     if plot_style == "full_grid":
@@ -27,6 +30,7 @@ def plot_data(figure, data_files, plot_details, axis_details, plot_visuals, is_3
 
     # Prepare the axis
     ax = figure.add_subplot(111, projection='3d' if is_3d else None)
+    # ax.set_facecolor(bg_color)  # Remove this line to keep default background
 
     # Plot each data file
     for i, file_path in enumerate(data_files):
@@ -42,7 +46,7 @@ def plot_data(figure, data_files, plot_details, axis_details, plot_visuals, is_3
             continue
 
         label = os.path.splitext(os.path.basename(file_path))[0]
-        line_style = {'Solid': '-', 'Dashed': '--', 'Dash-Dot': '-.'}[plot_details['line_style']]
+        line_style = {'Solid': '-', 'Dashed': '--', 'Dash-Dot': '-.'}.get(plot_details['line_style'], '-')
         point_style = {
             "None": "",
             "Circle": "o",
@@ -52,7 +56,7 @@ def plot_data(figure, data_files, plot_details, axis_details, plot_visuals, is_3
             "Star": "*",
             "Plus": "+",
             "Cross": "x"
-        }[plot_details['point_style']]
+        }.get(plot_details['point_style'], "")
         line_thickness = int(plot_details['line_thickness'])
 
         plot_type = plot_visuals['plot_type'].lower()
@@ -79,12 +83,11 @@ def plot_data(figure, data_files, plot_details, axis_details, plot_visuals, is_3
                 ax.hist(y, label=label)
         elif plot_type == "pie":
             if is_3d:
-                # Pie chart in 3D doesn't make sense; placeholder
-                pass
+                pass  # Pie chart in 3D doesn't make sense
             else:
                 ax.pie(y, labels=x)
 
-    # Set axis labels and title
+    # Set axis labels and title with adjusted padding
     ax.set_title(axis_details['title'], fontsize=axis_details['title_font_size'], pad=20)
     ax.set_xlabel(axis_details['x_label'], fontsize=axis_details['axis_font_size'])
     if is_3d:
@@ -92,6 +95,12 @@ def plot_data(figure, data_files, plot_details, axis_details, plot_visuals, is_3
         ax.set_zlabel(axis_details['y_label'], fontsize=axis_details['axis_font_size'])
     else:
         ax.set_ylabel(axis_details['y_label'], fontsize=axis_details['axis_font_size'])
+
+    # Set axis label colors (optional, you can keep default if preferred)
+    # ax.tick_params(axis='x', colors='black')
+    # ax.tick_params(axis='y', colors='black')
+    # if is_3d:
+    #     ax.tick_params(axis='z', colors='black')
 
     # Apply axis ranges
     try:

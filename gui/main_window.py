@@ -1,26 +1,28 @@
 # gui/main_window.py
 
-from PyQt5.QtWidgets import (
-    QMainWindow, QWidget, QGridLayout, QShortcut, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QTableWidget, QTableWidgetItem, QHeaderView,
-    QListWidgetItem, QColorDialog, QFileDialog, QTabWidget
-)
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QKeySequence
 import os
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from PyQt5.QtWidgets import (
+    QMainWindow, QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
+    QPushButton, QShortcut, QFileDialog, QListWidgetItem, QColorDialog,
+    QTableWidget, QTableWidgetItem, QHeaderView, QLabel, QTabWidget, QFrame
+)
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QKeySequence, QIcon
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
 
 from gui.tabs import GeneralTab, NormalizationTab
 from plots.plotting import plot_data
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
-import pandas as pd
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+
         self.setWindowTitle("Data Viz Pro - version 2.1.1")
         self.setGeometry(100, 100, 1200, 800)
+        self.setWindowIcon(QIcon('gui/resources/icon.png'))  # Set the window icon
 
         self.last_directory = os.path.expanduser("~")
 
@@ -32,45 +34,63 @@ class MainWindow(QMainWindow):
         self.temp_annotation = None
         self.selected_lines = []
 
+        # Initialize central widget and layout correctly
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
-
-        self.main_layout = QGridLayout(self.central_widget)
+        self.main_layout = QGridLayout()
+        self.central_widget.setLayout(self.main_layout)
+        self.main_layout.setContentsMargins(10, 10, 10, 10)
+        self.main_layout.setSpacing(10)
 
         # Create Tab Widget
         self.tabs = QTabWidget()
         self.general_tab = GeneralTab()
         self.normalization_tab = NormalizationTab()
-
-        self.tabs.addTab(self.general_tab, "General")
-        self.tabs.addTab(self.normalization_tab, "Normalization")
+        self.tabs.addTab(self.general_tab, QIcon('gui/resources/general_icon.png'), "General")
+        self.tabs.addTab(self.normalization_tab, QIcon('gui/resources/normalization_icon.png'), "Normalization")
 
         # Plot area
         self.figure = plt.figure()
         self.canvas = FigureCanvas(self.figure)
         self.toolbar = NavigationToolbar(self.canvas, self)
 
+        # Create a QFrame with rounded corners for the plot
+        self.plot_frame = QFrame()
+        self.plot_frame.setObjectName("PlotFrame")
+        self.plot_frame.setFrameShape(QFrame.StyledPanel)
+        self.plot_frame.setFrameShadow(QFrame.Raised)
+
+        # Set layout for plot_frame
+        self.plot_frame_layout = QVBoxLayout(self.plot_frame)
+        self.plot_frame_layout.setContentsMargins(5, 5, 5, 5)
+        self.plot_frame_layout.addWidget(self.toolbar)
+        self.plot_frame_layout.addWidget(self.canvas)
+
         # Plot area layout
         plot_layout = QVBoxLayout()
-        plot_layout.addWidget(self.toolbar)
-        plot_layout.addWidget(self.canvas)
+        plot_layout.addWidget(self.plot_frame)
 
         self.update_button = QPushButton("Update Plot")
+        # self.update_button.setIcon(QIcon('gui/resources/update_icon.png'))  # Icon removed
         self.update_button.clicked.connect(self.update_plot)
 
         self.show_data_structure_button = QPushButton("Show Data Structure")
+        # self.show_data_structure_button.setIcon(QIcon('gui/resources/data_structure_icon.png'))  # Icon removed
         self.show_data_structure_button.clicked.connect(self.show_data_structure)
 
         self.plot_buttons_layout = QHBoxLayout()
         self.plot_type_2d_button = QPushButton("2D")
+        # self.plot_type_2d_button.setIcon(QIcon('gui/resources/2d_icon.png'))  # Icon removed
         self.plot_type_2d_button.clicked.connect(self.plot_2d)
         self.plot_buttons_layout.addWidget(self.plot_type_2d_button)
 
         self.plot_type_3d_button = QPushButton("3D")
+        # self.plot_type_3d_button.setIcon(QIcon('gui/resources/3d_icon.png'))  # Icon removed
         self.plot_type_3d_button.clicked.connect(self.plot_3d)
         self.plot_buttons_layout.addWidget(self.plot_type_3d_button)
 
         self.expand_button = QPushButton("Expand Window")
+        # self.expand_button.setIcon(QIcon('gui/resources/expand_icon.png'))  # Icon removed
         self.expand_button.clicked.connect(self.expand_window)
 
         plot_layout.addWidget(self.update_button)
@@ -99,6 +119,18 @@ class MainWindow(QMainWindow):
         self.canvas.mpl_connect('button_press_event', self.on_click)
         self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
 
+                # Update the plot_frame stylesheet
+        self.plot_frame.setStyleSheet("""
+            #PlotFrame {
+                border: 1px solid #cccccc;
+                border-radius: 5px;
+                background-color: #ffffff;  /* Set to white */
+            }
+        """)
+
+
+
+
     def connect_signals(self):
         # Access panels from the general tab
         general_tab = self.general_tab
@@ -120,10 +152,11 @@ class MainWindow(QMainWindow):
         self.custom_annotations_panel.apply_changes_button.clicked.connect(self.apply_changes)
         self.custom_annotations_panel.calculate_distance_button.clicked.connect(self.start_distance_calculation)
 
-    # The following methods are updated to reference the panels via self.<panel_name>
+    # Include all other methods (choose_files, add_files, update_plot, etc.)
+    # Ensure all methods are properly implemented as in the previous code
 
     def choose_files(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "Select Files", self.last_directory, "All Files (*)")
+        files, _ = QFileDialog.getOpenFileNames(self, "Select Files", self.last_directory, "CSV Files (*.csv);;All Files (*)")
         if files:
             self.last_directory = os.path.dirname(files[0])  # Update the last directory
             self.selected_data_panel.selected_files_list.clear()
@@ -136,7 +169,7 @@ class MainWindow(QMainWindow):
                 self.selected_data_panel.selected_files_list.addItem(item)
 
     def add_files(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "Select Files", self.last_directory, "All Files (*)")
+        files, _ = QFileDialog.getOpenFileNames(self, "Select Files", self.last_directory, "CSV Files (*.csv);;All Files (*)")
         if files:
             self.last_directory = os.path.dirname(files[0])  # Update the last directory
             for file in files:
@@ -278,7 +311,7 @@ class MainWindow(QMainWindow):
         axis_details = self.axis_details_panel.get_axis_details()
         plot_visuals = self.plot_visuals_panel.get_plot_visuals()
 
-        plot_data(self.expanded_figure, data_files, plot_details, axis_details, plot_visuals, is_3d=False)
+        plot_data(self.expanded_figure, data_files, plot_details, axis_details, plot_visuals, is_3d=(self.plot_type == "3D"))
 
     def close_expanded_window(self, event):
         self.expanded_window = None

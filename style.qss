@@ -1,0 +1,19 @@
+/* QPushButton Styling - Soft Gray */
+QPushButton {
+    background-color: #f2f2f2;  /* Very light gray */
+    border: 1px solid #cccccc;  /* Light gray border */
+    color: #333333;             /* Dark gray text */
+    padding: 8px 15px;
+    text-align: center;
+    font-size: 10pt;
+    border-radius: 5px;
+}
+
+QPushButton:hover {
+    background-color: #e6e6e6;  /* Slightly darker gray on hover */
+    border: 1px solid #b3b3b3;
+}
+
+QPushButton:pressed {
+    background-color: #d9d9d9;  /* Even darker when pressed */
+}
