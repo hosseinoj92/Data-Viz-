@@ -3,7 +3,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QGridLayout, QLabel, QToolButton, QScrollArea, QSizePolicy,
     QPushButton, QHBoxLayout, QFrame, QFileDialog, QListWidgetItem, QColorDialog, QTableWidget, QHeaderView, QTableWidgetItem,
-    QMessageBox, 
+    QMessageBox, QButtonGroup  
 
 )
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -28,13 +28,20 @@ import matplotlib.text
 
 
 class CollapsibleSection(QWidget):
+
+    # Define a custom signal that emits the instance of the expanded section
+    section_expanded = pyqtSignal(object)
+
     def __init__(self, title, content_widget, parent=None):
         super().__init__(parent)
         self.toggle_button = QToolButton(text=title, checkable=True, checked=False)
         self.toggle_button.setStyleSheet("QToolButton { border: none; }")
         self.toggle_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.toggle_button.setArrowType(Qt.RightArrow)
-        self.toggle_button.clicked.connect(self.on_toggle)
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setChecked(False)
+        # Connect the toggled signal instead of clicked
+        self.toggle_button.toggled.connect(self.on_toggle)
 
         self.content_area = QWidget()
         self.content_area.setMaximumHeight(0)
@@ -56,14 +63,17 @@ class CollapsibleSection(QWidget):
         self.content_area.setLayout(self.content_layout)
         self.content_layout.addWidget(content_widget)
 
-    def on_toggle(self):
-        if self.toggle_button.isChecked():
+    def on_toggle(self, checked):
+        if checked:
+            print(f"'{self.toggle_button.text()}' section expanded.")
             self.toggle_button.setArrowType(Qt.DownArrow)
             self.content_area.setMaximumHeight(16777215)  # Expand to full size
+            # Emit the signal indicating this section has been expanded
+            self.section_expanded.emit(self)
         else:
+            print(f"'{self.toggle_button.text()}' section collapsed.")
             self.toggle_button.setArrowType(Qt.RightArrow)
             self.content_area.setMaximumHeight(0)  # Collapse
-
 
 class GeneralTab(QWidget):
     def __init__(self, parent=None):
@@ -455,8 +465,10 @@ class GeneralTab(QWidget):
 
 
 class NormalizationTab(QWidget):
+
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.is_collapsing = False  # Flag to prevent recursive signal handling
         self.init_ui()
         self.expanded_window = None  # To track the expanded window
 
@@ -478,26 +490,31 @@ class NormalizationTab(QWidget):
         # Plot Details Section
         self.plot_details_panel = PlotDetailsPanel()
         plot_details_section = CollapsibleSection("Plot Details", self.plot_details_panel)
+        plot_details_section.section_expanded.connect(self.on_section_expanded)
         self.collapsible_sections.append(plot_details_section)
 
         # Axis Details Section
         self.axis_details_panel = AxisDetailsPanel()
         axis_details_section = CollapsibleSection("Axis Details", self.axis_details_panel)
+        axis_details_section.section_expanded.connect(self.on_section_expanded)
         self.collapsible_sections.append(axis_details_section)
 
         # Plot Visuals Section
         self.plot_visuals_panel = PlotVisualsPanel()
         plot_visuals_section = CollapsibleSection("Plot Visuals", self.plot_visuals_panel)
+        plot_visuals_section.section_expanded.connect(self.on_section_expanded)
         self.collapsible_sections.append(plot_visuals_section)
 
         # Custom Annotations Section
         self.custom_annotations_panel = CustomAnnotationsPanel()
         custom_annotations_section = CollapsibleSection("Custom Annotations", self.custom_annotations_panel)
+        custom_annotations_section.section_expanded.connect(self.on_section_expanded)
         self.collapsible_sections.append(custom_annotations_section)
 
         # Additional Text Section
         self.additional_text_panel = AdditionalTextPanel()
         additional_text_section = CollapsibleSection("Additional Text", self.additional_text_panel)
+        additional_text_section.section_expanded.connect(self.on_section_expanded)
         self.collapsible_sections.append(additional_text_section)
 
         # Arrange Column 0
@@ -616,10 +633,19 @@ class NormalizationTab(QWidget):
         self.custom_annotations_panel.apply_changes_button.clicked.connect(self.apply_changes)
         self.custom_annotations_panel.calculate_distance_button.clicked.connect(self.start_distance_calculation)
 
-    # Include all other methods (choose_files, add_files, update_plot, etc.)
-    # These methods are similar to those in the GeneralTab
-    # Ensure all methods are properly implemented as in the previous code
+    def on_section_expanded(self, expanded_section):
+        print(f"Section '{expanded_section.toggle_button.text()}' expanded. Collapsing other sections.")
+        if self.is_collapsing:
+            return
+        self.is_collapsing = True
+        # When a section is expanded, collapse all other sections
+        for section in self.collapsible_sections:
+            if section != expanded_section and section.toggle_button.isChecked():
+                print(f"Collapsing section '{section.toggle_button.text()}'")
+                section.toggle_button.setChecked(False)
+        self.is_collapsing = False
 
+                
     def choose_files(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Select Files", self.last_directory, "CSV Files (*.csv);;All Files (*)")
         if files:
