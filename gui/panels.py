@@ -4,7 +4,7 @@ import os
 from PyQt5.QtWidgets import (
     QGroupBox, QVBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
     QListWidget, QScrollArea, QCheckBox, QSpinBox, QComboBox, QHBoxLayout,
-    QListWidgetItem, QColorDialog
+    QListWidgetItem, QColorDialog, QMessageBox, QFileDialog, QWidget
 )
 from PyQt5.QtCore import Qt
 
@@ -303,3 +303,195 @@ class PlotDetailsPanel(QGroupBox):
             'line_thickness': self.line_thickness_combo.currentText(),
             'scale_type': self.scale_type_combo.currentText(),
         }
+
+
+'''class NormalizationMethodPanel(QWidget):
+    def __init__(self, method_name):
+        super().__init__()
+        self.method_name = method_name
+        self.init_ui()
+
+    def init_ui(self):
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+
+        # Add input fields based on method_name
+        if self.method_name == "Area Within a Specific Interval":
+            self.layout.addWidget(QLabel("Start Interval:"))
+            self.start_interval_input = QLineEdit()
+            self.layout.addWidget(self.start_interval_input)
+
+            self.layout.addWidget(QLabel("End Interval:"))
+            self.end_interval_input = QLineEdit()
+            self.layout.addWidget(self.end_interval_input)
+        elif self.method_name == "Normalization to a Reference Peak":
+            self.layout.addWidget(QLabel("Reference Peak Index:"))
+            self.reference_peak_index_input = QLineEdit()
+            self.layout.addWidget(self.reference_peak_index_input)
+        elif self.method_name == "Multiplicative Scatter Correction (MSC)":
+            self.layout.addWidget(QLabel("Reference Spectrum File:"))
+            self.reference_spectrum_button = QPushButton("Choose Reference Spectrum")
+            self.layout.addWidget(self.reference_spectrum_button)
+            self.reference_spectrum_button.clicked.connect(self.choose_reference_spectrum)
+        elif self.method_name == "Baseline Correction Normalization":
+            self.layout.addWidget(QLabel("Baseline File:"))
+            self.baseline_file_button = QPushButton("Choose Baseline File")
+            self.layout.addWidget(self.baseline_file_button)
+            self.baseline_file_button.clicked.connect(self.choose_baseline_file)
+        elif self.method_name == "Normalization Within a Moving Window":
+            self.layout.addWidget(QLabel("Window Size:"))
+            self.window_size_input = QLineEdit()
+            self.layout.addWidget(self.window_size_input)
+        # For other methods, no additional inputs are needed
+
+        # Add Apply button
+        self.apply_button = QPushButton("Apply Normalization")
+        self.layout.addWidget(self.apply_button)
+
+    def get_parameters(self):
+        params = {}
+        if self.method_name == "Area Within a Specific Interval":
+            try:
+                start = float(self.start_interval_input.text())
+                end = float(self.end_interval_input.text())
+                params['interval'] = (start, end)
+            except ValueError:
+                QMessageBox.warning(self, "Invalid Parameters", "Please enter valid interval values.")
+                return None
+        elif self.method_name == "Normalization to a Reference Peak":
+            try:
+                reference_peak_index = int(self.reference_peak_index_input.text())
+                params['reference_peak_index'] = reference_peak_index
+            except ValueError:
+                QMessageBox.warning(self, "Invalid Parameters", "Please enter a valid reference peak index.")
+                return None
+        elif self.method_name == "Multiplicative Scatter Correction (MSC)":
+            if not hasattr(self, 'reference_spectrum_file'):
+                QMessageBox.warning(self, "Missing Reference", "Please choose a reference spectrum file.")
+                return None
+            else:
+                params['reference_spectrum_file'] = self.reference_spectrum_file
+        elif self.method_name == "Baseline Correction Normalization":
+            if not hasattr(self, 'baseline_file'):
+                QMessageBox.warning(self, "Missing Baseline", "Please choose a baseline file.")
+                return None
+            else:
+                params['baseline_file'] = self.baseline_file
+        elif self.method_name == "Normalization Within a Moving Window":
+            try:
+                window_size = int(self.window_size_input.text())
+                params['window_size'] = window_size
+            except ValueError:
+                QMessageBox.warning(self, "Invalid Parameters", "Please enter a valid window size.")
+                return None
+        # For other methods, no parameters
+        return params
+
+    def choose_reference_spectrum(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Reference Spectrum", "", "CSV Files (*.csv);;All Files (*)")
+        if file_path:
+            self.reference_spectrum_file = file_path
+            self.reference_spectrum_button.setText(os.path.basename(file_path))
+
+    def choose_baseline_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Baseline File", "", "CSV Files (*.csv);;All Files (*)")
+        if file_path:
+            self.baseline_file = file_path
+            self.baseline_file_button.setText(os.path.basename(file_path))'''
+
+
+# gui/panels.py
+
+class NormalizationMethodPanel(QWidget):
+    def __init__(self, method_name):
+        super().__init__()
+        self.method_name = method_name
+        self.init_ui()
+
+    def init_ui(self):
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+
+        # Add input fields based on method_name
+        if self.method_name == "Area Within a Specific Interval":
+            self.layout.addWidget(QLabel("Start Interval:"))
+            self.start_interval_input = QLineEdit()
+            self.layout.addWidget(self.start_interval_input)
+
+            self.layout.addWidget(QLabel("End Interval:"))
+            self.end_interval_input = QLineEdit()
+            self.layout.addWidget(self.end_interval_input)
+        
+        elif self.method_name == "Normalization to a Reference Peak":
+            self.layout.addWidget(QLabel("Reference Peak Index:"))
+            self.reference_peak_index_input = QLineEdit()
+            self.layout.addWidget(self.reference_peak_index_input)
+        
+        elif self.method_name == "Multiplicative Scatter Correction (MSC)":
+            self.layout.addWidget(QLabel("Reference Spectrum File:"))
+            self.reference_spectrum_button = QPushButton("Choose Reference Spectrum")
+            self.layout.addWidget(self.reference_spectrum_button)
+            self.reference_spectrum_button.clicked.connect(self.choose_reference_spectrum)
+        
+        elif self.method_name == "Baseline Correction Normalization":
+            self.layout.addWidget(QLabel("Baseline File:"))
+            self.baseline_file_button = QPushButton("Choose Baseline File")
+            self.layout.addWidget(self.baseline_file_button)
+            self.baseline_file_button.clicked.connect(self.choose_baseline_file)
+        
+        elif self.method_name == "Normalization Within a Moving Window":
+            self.layout.addWidget(QLabel("Window Size:"))
+            self.window_size_input = QLineEdit()
+            self.layout.addWidget(self.window_size_input)
+        
+        # Add Apply and Save buttons
+        self.apply_button = QPushButton("Apply Normalization")
+        self.save_button = QPushButton("Save Normalized Data")
+        self.layout.addWidget(self.apply_button)
+        self.layout.addWidget(self.save_button)
+
+    def choose_reference_spectrum(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Reference Spectrum", "", "CSV Files (*.csv);;All Files (*)")
+        if file_path:
+            self.reference_spectrum_file = file_path
+            self.reference_spectrum_button.setText(os.path.basename(file_path))
+
+    def choose_baseline_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Baseline File", "", "CSV Files (*.csv);;All Files (*)")
+        if file_path:
+            self.baseline_file = file_path
+            self.baseline_file_button.setText(os.path.basename(file_path))
+
+    def get_parameters(self):
+        params = {}
+        try:
+            if self.method_name == "Area Within a Specific Interval":
+                start = float(self.start_interval_input.text())
+                end = float(self.end_interval_input.text())
+                params['interval'] = (start, end)
+            
+            elif self.method_name == "Normalization to a Reference Peak":
+                reference_peak_index = int(self.reference_peak_index_input.text())
+                params['reference_peak_index'] = reference_peak_index
+            
+            elif self.method_name == "Multiplicative Scatter Correction (MSC)":
+                if not hasattr(self, 'reference_spectrum_file'):
+                    QMessageBox.warning(self, "Missing Reference", "Please choose a reference spectrum file.")
+                    return None
+                params['reference'] = self.reference_spectrum_file
+            
+            elif self.method_name == "Baseline Correction Normalization":
+                if not hasattr(self, 'baseline_file'):
+                    QMessageBox.warning(self, "Missing Baseline", "Please choose a baseline file.")
+                    return None
+                params['baseline'] = self.baseline_file
+            
+            elif self.method_name == "Normalization Within a Moving Window":
+                window_size = int(self.window_size_input.text())
+                params['window_size'] = window_size
+            
+        except ValueError:
+            QMessageBox.warning(self, "Invalid Parameters", "Please enter valid parameter values.")
+            return None
+
+        return params

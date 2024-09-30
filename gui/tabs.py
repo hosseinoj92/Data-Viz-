@@ -11,7 +11,7 @@ from PyQt5.QtGui import QIcon
 
 from gui.panels import (
     SelectedDataPanel, AxisDetailsPanel, AdditionalTextPanel,
-    CustomAnnotationsPanel, PlotVisualsPanel, PlotDetailsPanel
+    CustomAnnotationsPanel, PlotVisualsPanel, PlotDetailsPanel, NormalizationMethodPanel
 )
 from plots.plotting import plot_data
 
@@ -26,6 +26,8 @@ import matplotlib.text
 ####################################
 
 
+
+# gui/tabs.py
 
 class CollapsibleSection(QWidget):
 
@@ -74,6 +76,7 @@ class CollapsibleSection(QWidget):
             print(f"'{self.toggle_button.text()}' section collapsed.")
             self.toggle_button.setArrowType(Qt.RightArrow)
             self.content_area.setMaximumHeight(0)  # Collapse
+
 
 class GeneralTab(QWidget):
     def __init__(self, parent=None):
@@ -528,15 +531,43 @@ class NormalizationTab(QWidget):
         column0_widget.setLayout(column0_layout)
         self.layout.addWidget(column0_widget, 0, 0)
 
-        # Column 1: Currently Empty (Reserved for Future Normalization Functionalities)
-        column1_widget = QWidget()
+        # Column 1: Normalization Functionalities with Collapsible Sections
+        self.normalization_methods = [
+            "Min-Max Normalization",
+            "Max Normalization",
+            "Area Under Curve (AUC) Normalization",
+            "Area Within a Specific Interval",
+            "Vector (Euclidean) Normalization",
+            "Standard Score (Z-score) Normalization",
+            "Total Intensity Normalization",
+            "Normalization to a Reference Peak",
+            "Multiplicative Scatter Correction (MSC)",
+            "Baseline Correction Normalization",
+            "Normalization Within a Moving Window"
+        ]
+
+        self.normalization_sections = []
         column1_layout = QVBoxLayout()
         column1_layout.setContentsMargins(0, 0, 0, 0)
-        column1_layout.setSpacing(0)
+        column1_layout.setSpacing(10)
+
+        for method_name in self.normalization_methods:
+            panel = NormalizationMethodPanel(method_name)
+            section = CollapsibleSection(method_name, panel)
+            section.section_expanded.connect(self.on_normalization_section_expanded)
+            column1_layout.addWidget(section)
+            self.normalization_sections.append(section)
+
+            # Connect Apply and Save buttons
+            panel.apply_button.clicked.connect(lambda _, p=panel: self.apply_normalization(p))
+            panel.save_button.clicked.connect(lambda _, p=panel: self.save_normalized_data(p))
+
+        column1_layout.addStretch()
+        column1_widget = QWidget()
         column1_widget.setLayout(column1_layout)
         self.layout.addWidget(column1_widget, 0, 1)
 
-        # Column 2: Plotting Interface
+        # Column 2: Plotting Interface (keep as is)
         # Plot area
         self.figure = plt.figure()
         self.canvas = FigureCanvas(self.figure)
@@ -593,16 +624,17 @@ class NormalizationTab(QWidget):
         self.layout.addWidget(plot_widget, 0, 2)
 
         self.layout.setColumnStretch(0, 2)
-        self.layout.setColumnStretch(1, 1)  # Column 1 is narrower since it's empty
+        self.layout.setColumnStretch(1, 2)  # Column 1 is now equally stretched
         self.layout.setColumnStretch(2, 4)
 
-        # Initialize plot type
+        # Initialize plot type and other variables
         self.plot_type = "2D"
         self.text_items = []
         self.annotations = []
         self.annotation_mode = None  # None, 'point', 'vline', 'hline'
         self.temp_annotation = None
         self.selected_lines = []
+        self.normalized_data = {}  # To store normalized data
 
         # Connect signals and slots from the panels
         self.connect_signals()
@@ -619,6 +651,354 @@ class NormalizationTab(QWidget):
                 background-color: #ffffff;  /* Set to white */
             }
         """)
+
+        # Define normalization functions
+        self.define_normalization_functions()
+
+    def define_normalization_functions(self):
+        # Normalization functions defined within the class
+
+        def min_max_normalization(y):
+            y_min = np.min(y)
+            y_max = np.max(y)
+            if y_max - y_min == 0:
+                return np.zeros_like(y)
+            return (y - y_min) / (y_max - y_min)
+
+        def max_normalization(y):
+            y_max = np.max(y)
+            if y_max == 0:
+                return np.zeros_like(y)
+            return y / y_max
+
+        def auc_normalization(x, y):
+            auc = np.trapz(y, x)
+            if auc == 0:
+                return np.zeros_like(y)
+            return y / auc
+
+        def auc_interval_normalization(x, y, interval):
+            start, end = interval
+            mask = (x >= start) & (x <= end)
+            auc_interval = np.trapz(y[mask], x[mask])
+            if auc_interval == 0:
+                return np.zeros_like(y)
+            return y / auc_interval
+
+        def vector_normalization(y):
+            norm = np.linalg.norm(y)
+            if norm == 0:
+                return np.zeros_like(y)
+            return y / norm
+
+        def z_score_normalization(y):
+            mean = np.mean(y)
+            std = np.std(y)
+            if std == 0:
+                return np.zeros_like(y)
+            return (y - mean) / std
+
+        def total_intensity_normalization(y):
+            total = np.sum(y)
+            if total == 0:
+                return np.zeros_like(y)
+            return y / total
+
+        def normalization_to_reference_peak(y, reference_peak_index):
+            try:
+                x_ref = y[reference_peak_index]
+            except IndexError:
+                QMessageBox.warning(self, "Invalid Index", "Reference peak index out of range.")
+                return None
+            if x_ref == 0:
+                return np.zeros_like(y)
+            return y / x_ref
+
+        def multiplicative_scatter_correction(y, reference):
+            if len(y) != len(reference):
+                QMessageBox.warning(self, "Length Mismatch", "Input and reference spectra must have the same length.")
+                return None
+            try:
+                beta, alpha = np.polyfit(reference, y, 1)
+                return beta * y + alpha
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"MSC failed: {e}")
+                return None
+
+        def baseline_correction_normalization(y, baseline):
+            if len(y) != len(baseline):
+                QMessageBox.warning(self, "Length Mismatch", "Intensity and baseline must have the same length.")
+                return None
+            y_corrected = y - baseline
+            y_max = np.max(y_corrected)
+            if y_max == 0:
+                return np.zeros_like(y_corrected)
+            return y_corrected / y_max
+
+        def moving_window_normalization(y, window_size):
+            if window_size < 1:
+                QMessageBox.warning(self, "Invalid Window Size", "Window size must be at least 1.")
+                return None
+            y_normalized = np.copy(y)
+            n = len(y)
+            for i in range(n):
+                start = max(i - window_size, 0)
+                end = min(i + window_size + 1, n)
+                window_max = np.max(y[start:end])
+                if window_max != 0:
+                    y_normalized[i] = y[i] / window_max
+                else:
+                    y_normalized[i] = 0
+            return y_normalized
+
+        # Assign to self for access
+        self.normalization_functions = [
+            min_max_normalization,             # 0
+            max_normalization,                 # 1
+            auc_normalization,                 # 2
+            auc_interval_normalization,        # 3
+            vector_normalization,              # 4
+            z_score_normalization,             # 5
+            total_intensity_normalization,     # 6
+            normalization_to_reference_peak,   # 7
+            multiplicative_scatter_correction, # 8
+            baseline_correction_normalization, # 9
+            moving_window_normalization         # 10
+        ]
+
+    def get_normalization_function(self, method_index):
+        if 0 <= method_index < len(self.normalization_functions):
+            return self.normalization_functions[method_index]
+        else:
+            return None
+
+    def apply_normalization(self, panel):
+        # Get the selected data files
+        data_files = self.selected_data_panel.get_selected_files()
+        if not data_files:
+            QMessageBox.warning(self, "No Data Selected", "Please select data files to normalize.")
+            return
+
+        # Get normalization method index
+        try:
+            method_index = self.normalization_methods.index(panel.method_name)
+        except ValueError:
+            QMessageBox.warning(self, "Invalid Method", "Selected normalization method is not recognized.")
+            return
+
+        method_func = self.get_normalization_function(method_index)
+        if method_func is None:
+            QMessageBox.warning(self, "Invalid Method", "Selected normalization method is not implemented.")
+            return
+
+        # Get parameters from panel
+        params = panel.get_parameters()
+        if params is None:
+            return  # Error message already shown
+
+        # Apply normalization to each selected file
+        self.normalized_data = {}  # Reset normalized data
+        for file_path in data_files:
+            try:
+                df = pd.read_csv(file_path)
+                x_col = int(self.plot_details_panel.get_plot_details()['x_axis_col']) - 1
+                y_col = int(self.plot_details_panel.get_plot_details()['y_axis_col']) - 1
+                x = df.iloc[:, x_col].values
+                y = df.iloc[:, y_col].values
+
+                # Apply normalization
+                if method_index in [2, 3]:  # Methods that require x and y
+                    y_normalized = method_func(x, y, **params)
+                elif method_index == 7:  # Normalization to a Reference Peak
+                    y_normalized = method_func(y, **params)
+                    if y_normalized is None:
+                        continue
+                elif method_index == 8:  # MSC
+                    reference_file = params.get('reference')
+                    if not os.path.exists(reference_file):
+                        QMessageBox.warning(self, "Reference File Missing", f"Reference spectrum file not found: {reference_file}")
+                        continue
+                    ref_df = pd.read_csv(reference_file)
+                    y_ref_col = y_col
+                    y_ref = ref_df.iloc[:, y_ref_col].values
+                    y_normalized = method_func(y, reference=y_ref)
+                    if y_normalized is None:
+                        continue
+                elif method_index == 9:  # Baseline Correction
+                    baseline_file = params.get('baseline')
+                    if not os.path.exists(baseline_file):
+                        QMessageBox.warning(self, "Baseline File Missing", f"Baseline file not found: {baseline_file}")
+                        continue
+                    baseline_df = pd.read_csv(baseline_file)
+                    y_baseline = baseline_df.iloc[:, y_col].values
+                    y_normalized = method_func(y, baseline=y_baseline)
+                    if y_normalized is None:
+                        continue
+                else:
+                    y_normalized = method_func(y, **params)
+                    if y_normalized is None:
+                        continue
+
+                # Store normalized data
+                self.normalized_data[file_path] = (x, y_normalized)
+
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Error normalizing file {file_path}: {e}")
+
+        # Update the plot with normalized data
+        self.update_normalized_plot()
+
+    def save_normalized_data(self, panel):
+        if not self.normalized_data:
+            QMessageBox.warning(self, "No Normalized Data", "Please apply normalization first.")
+            return
+
+        # Select normalization method for naming
+        method_name = panel.method_name.replace(" ", "_").replace("(", "").replace(")", "").replace("-", "").replace("/", "_")
+
+        # Ask user to select folder to save files
+        directory = QFileDialog.getExistingDirectory(self, "Select Directory to Save Normalized Data")
+        if not directory:
+            return
+
+        for file_path, (x, y_normalized) in self.normalized_data.items():
+            try:
+                base_name = os.path.splitext(os.path.basename(file_path))[0]
+                new_file_name = f"{base_name}_{method_name}.csv"
+                new_file_path = os.path.join(directory, new_file_name)
+
+                # Create dataframe to save
+                df = pd.DataFrame({
+                    self.plot_details_panel.get_plot_details()['x_axis_label']: x,
+                    self.plot_details_panel.get_plot_details()['y_axis_label']: y_normalized
+                })
+
+                df.to_csv(new_file_path, index=False)
+
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Error saving file {new_file_path}: {e}")
+
+        QMessageBox.information(self, "Save Successful", f"Normalized data saved to {directory}")
+
+    def update_normalized_plot(self):
+        if not self.normalized_data:
+            QMessageBox.warning(self, "No Normalized Data", "Please apply normalization first.")
+            return
+
+        # Gather plot settings
+        plot_details = self.plot_details_panel.get_plot_details()
+        axis_details = self.axis_details_panel.get_axis_details()
+        plot_visuals = self.plot_visuals_panel.get_plot_visuals()
+
+        # Clear the figure
+        self.figure.clear()
+
+        # Prepare the axis
+        ax = self.figure.add_subplot(111, projection='3d' if self.plot_type == "3D" else None)
+
+        # Plot each normalized data
+        for i, (file_path, (x, y_normalized)) in enumerate(self.normalized_data.items()):
+            label = os.path.splitext(os.path.basename(file_path))[0] + "_normalized"
+            line_style = {'Solid': '-', 'Dashed': '--', 'Dash-Dot': '-.'}.get(plot_details['line_style'], '-')
+            point_style = {
+                "None": "",
+                "Circle": "o",
+                "Square": "s",
+                "Triangle Up": "^",
+                "Triangle Down": "v",
+                "Star": "*",
+                "Plus": "+",
+                "Cross": "x"
+            }.get(plot_details['point_style'], "")
+            line_thickness = int(plot_details['line_thickness'])
+
+            plot_type = plot_visuals['plot_type'].lower()
+
+            if plot_type == "line":
+                if self.plot_type == "3D":
+                    ax.plot(x, [i]*len(x), y_normalized, label=label, linestyle=line_style, marker=point_style, linewidth=line_thickness)
+                else:
+                    ax.plot(x, y_normalized, label=label, linestyle=line_style, marker=point_style, linewidth=line_thickness)
+            elif plot_type == "bar":
+                if self.plot_type == "3D":
+                    ax.bar(x, y_normalized, zs=i, zdir='y', label=label)
+                else:
+                    ax.bar(x, y_normalized, label=label)
+            elif plot_type == "scatter":
+                if self.plot_type == "3D":
+                    ax.scatter(x, [i]*len(x), y_normalized, label=label)
+                else:
+                    ax.scatter(x, y_normalized, label=label)
+            elif plot_type == "histogram":
+                if self.plot_type == "3D":
+                    ax.hist(y_normalized, zs=i, zdir='y', label=label)
+                else:
+                    ax.hist(y_normalized, label=label)
+            elif plot_type == "pie":
+                if self.plot_type == "3D":
+                    pass  # Pie chart in 3D doesn't make sense
+                else:
+                    ax.pie(y_normalized, labels=x)
+
+        # Set axis labels and title with adjusted padding
+        ax.set_title(axis_details['title'], fontsize=axis_details['title_font_size'], pad=20)
+        ax.set_xlabel(axis_details['x_label'], fontsize=axis_details['axis_font_size'])
+        if self.plot_type == "3D":
+            ax.set_ylabel('Offset', fontsize=axis_details['axis_font_size'])
+            ax.set_zlabel(axis_details['y_label'], fontsize=axis_details['axis_font_size'])
+        else:
+            ax.set_ylabel(axis_details['y_label'], fontsize=axis_details['axis_font_size'])
+
+        # Apply axis ranges
+        try:
+            x_min = float(axis_details['x_min']) if axis_details['x_min'] else None
+            x_max = float(axis_details['x_max']) if axis_details['x_max'] else None
+            y_min = float(axis_details['y_min']) if axis_details['y_min'] else None
+            y_max = float(axis_details['y_max']) if axis_details['y_max'] else None
+
+            if x_min is not None and x_max is not None:
+                ax.set_xlim(x_min, x_max)
+            if y_min is not None and y_max is not None:
+                ax.set_ylim(y_min, y_max)
+        except ValueError:
+            QMessageBox.warning(self, "Invalid Axis Range", "Please enter valid axis range values.")
+
+        # Apply scales
+        scale_type = plot_details['scale_type'].lower()
+        x_scale = 'linear'
+        y_scale = 'linear'
+        if 'logarithmic x-axis' in scale_type:
+            x_scale = 'log'
+        if 'logarithmic y-axis' in scale_type:
+            y_scale = 'log'
+        if 'logarithmic both axes' in scale_type:
+            x_scale = y_scale = 'log'
+        ax.set_xscale(x_scale)
+        ax.set_yscale(y_scale)
+
+        # Apply grid settings
+        if plot_visuals['add_grid']:
+            ax.grid(True)
+        if plot_visuals['add_sub_grid']:
+            ax.minorticks_on()
+            ax.grid(which='minor', linestyle=':', linewidth='0.5')
+
+        # Add legend if required
+        if plot_visuals['apply_legends']:
+            ax.legend(fontsize=axis_details['legend_font_size'])
+
+        # Redraw the figure
+        self.canvas.draw_idle()
+
+    def on_normalization_section_expanded(self, expanded_section):
+        if self.is_collapsing:
+            return
+        self.is_collapsing = True
+        # Collapse other normalization sections
+        for section in self.normalization_sections:
+            if section != expanded_section and section.toggle_button.isChecked():
+                section.toggle_button.setChecked(False)
+        self.is_collapsing = False
 
     def connect_signals(self):
         # Access panels
@@ -644,6 +1024,52 @@ class NormalizationTab(QWidget):
                 print(f"Collapsing section '{section.toggle_button.text()}'")
                 section.toggle_button.setChecked(False)
         self.is_collapsing = False
+
+    def apply_normalization(self, panel):
+        # Get the selected data files
+        data_files = self.selected_data_panel.get_selected_files()
+        if not data_files:
+            QMessageBox.warning(self, "No Data Selected", "Please select data files to normalize.")
+            return
+
+        # Get normalization method index
+        method_index = self.normalization_methods.index(panel.method_name)
+        method_func = self.get_normalization_function(method_index)
+
+        if method_func is None:
+            QMessageBox.warning(self, "Invalid Method", "Selected normalization method is not implemented.")
+            return
+
+        # Get parameters from panel
+        params = panel.get_parameters()
+        if params is None:
+            return  # Error message already shown
+
+        # Apply normalization to each selected file
+        self.normalized_data = {}  # Dict to store normalized data
+        for file_path in data_files:
+            try:
+                df = pd.read_csv(file_path)
+                x_col = int(self.plot_details_panel.x_axis_col_input.text()) - 1
+                y_col = int(self.plot_details_panel.y_axis_col_input.text()) - 1
+                x = df.iloc[:, x_col].values
+                y = df.iloc[:, y_col].values
+
+                # Apply normalization
+                if method_index in [2, 3]:  # Methods that require x and y
+                    y_normalized = method_func(x, y, **params)
+                else:
+                    y_normalized = method_func(y, **params)
+
+                # Store normalized data
+                self.normalized_data[file_path] = (x, y_normalized)
+
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Error normalizing file {file_path}: {e}")
+
+        # Update the plot with normalized data
+        self.update_normalized_plot()
+
 
                 
     def choose_files(self):
