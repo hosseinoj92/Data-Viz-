@@ -34,7 +34,8 @@ class MainWindow(QMainWindow):
         # Create Tab Widget
         self.tabs = QTabWidget()
         self.general_tab = GeneralTab()
-        self.normalization_tab = NormalizationTab()
+        self.normalization_tab = NormalizationTab(self.general_tab)
+        
         self.tabs.addTab(self.general_tab, QIcon('gui/resources/general_icon.png'), "General")
         self.tabs.addTab(self.normalization_tab, QIcon('gui/resources/normalization_icon.png'), "Normalization")
 

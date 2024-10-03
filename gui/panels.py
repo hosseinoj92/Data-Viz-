@@ -43,16 +43,21 @@ class DraggableListWidget(QListWidget):
             event.ignore()
 
 class SelectedDataPanel(QGroupBox):
-    def __init__(self, parent=None):
+    def __init__(self,include_retract_button=False, parent=None):
         super().__init__("Selected Data", parent)
-        self.init_ui()
+        self.init_ui(include_retract_button)
 
-    def init_ui(self):
+    def init_ui(self,include_retract_button):
         self.layout = QVBoxLayout()
 
         self.file_selector_button = QPushButton("Choose Files")
         self.add_file_button = QPushButton("Add Files")
         self.select_all_button = QPushButton("Select All")
+
+        #self.retract_button = QPushButton("Retract from General")    
+        #self.retract_button.setFixedHeight(self.select_all_button.sizeHint().height())  
+
+
         self.selected_files_list = DraggableListWidget()
 
         self.scroll_area = QScrollArea()
@@ -62,6 +67,13 @@ class SelectedDataPanel(QGroupBox):
         self.layout.addWidget(self.file_selector_button)
         self.layout.addWidget(self.add_file_button)
         self.layout.addWidget(self.select_all_button)
+        #self.layout.addWidget(self.retract_button)
+
+        if include_retract_button:  # Conditionally add the "Retract from General" button
+            self.retract_button = QPushButton("Retract from General")  
+            self.layout.addWidget(self.retract_button)
+
+        
         self.layout.addWidget(self.scroll_area)
         self.setLayout(self.layout)
 
@@ -303,104 +315,6 @@ class PlotDetailsPanel(QGroupBox):
             'line_thickness': self.line_thickness_combo.currentText(),
             'scale_type': self.scale_type_combo.currentText(),
         }
-
-
-'''class NormalizationMethodPanel(QWidget):
-    def __init__(self, method_name):
-        super().__init__()
-        self.method_name = method_name
-        self.init_ui()
-
-    def init_ui(self):
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
-
-        # Add input fields based on method_name
-        if self.method_name == "Area Within a Specific Interval":
-            self.layout.addWidget(QLabel("Start Interval:"))
-            self.start_interval_input = QLineEdit()
-            self.layout.addWidget(self.start_interval_input)
-
-            self.layout.addWidget(QLabel("End Interval:"))
-            self.end_interval_input = QLineEdit()
-            self.layout.addWidget(self.end_interval_input)
-        elif self.method_name == "Normalization to a Reference Peak":
-            self.layout.addWidget(QLabel("Reference Peak Index:"))
-            self.reference_peak_index_input = QLineEdit()
-            self.layout.addWidget(self.reference_peak_index_input)
-        elif self.method_name == "Multiplicative Scatter Correction (MSC)":
-            self.layout.addWidget(QLabel("Reference Spectrum File:"))
-            self.reference_spectrum_button = QPushButton("Choose Reference Spectrum")
-            self.layout.addWidget(self.reference_spectrum_button)
-            self.reference_spectrum_button.clicked.connect(self.choose_reference_spectrum)
-        elif self.method_name == "Baseline Correction Normalization":
-            self.layout.addWidget(QLabel("Baseline File:"))
-            self.baseline_file_button = QPushButton("Choose Baseline File")
-            self.layout.addWidget(self.baseline_file_button)
-            self.baseline_file_button.clicked.connect(self.choose_baseline_file)
-        elif self.method_name == "Normalization Within a Moving Window":
-            self.layout.addWidget(QLabel("Window Size:"))
-            self.window_size_input = QLineEdit()
-            self.layout.addWidget(self.window_size_input)
-        # For other methods, no additional inputs are needed
-
-        # Add Apply button
-        self.apply_button = QPushButton("Apply Normalization")
-        self.layout.addWidget(self.apply_button)
-
-    def get_parameters(self):
-        params = {}
-        if self.method_name == "Area Within a Specific Interval":
-            try:
-                start = float(self.start_interval_input.text())
-                end = float(self.end_interval_input.text())
-                params['interval'] = (start, end)
-            except ValueError:
-                QMessageBox.warning(self, "Invalid Parameters", "Please enter valid interval values.")
-                return None
-        elif self.method_name == "Normalization to a Reference Peak":
-            try:
-                reference_peak_index = int(self.reference_peak_index_input.text())
-                params['reference_peak_index'] = reference_peak_index
-            except ValueError:
-                QMessageBox.warning(self, "Invalid Parameters", "Please enter a valid reference peak index.")
-                return None
-        elif self.method_name == "Multiplicative Scatter Correction (MSC)":
-            if not hasattr(self, 'reference_spectrum_file'):
-                QMessageBox.warning(self, "Missing Reference", "Please choose a reference spectrum file.")
-                return None
-            else:
-                params['reference_spectrum_file'] = self.reference_spectrum_file
-        elif self.method_name == "Baseline Correction Normalization":
-            if not hasattr(self, 'baseline_file'):
-                QMessageBox.warning(self, "Missing Baseline", "Please choose a baseline file.")
-                return None
-            else:
-                params['baseline_file'] = self.baseline_file
-        elif self.method_name == "Normalization Within a Moving Window":
-            try:
-                window_size = int(self.window_size_input.text())
-                params['window_size'] = window_size
-            except ValueError:
-                QMessageBox.warning(self, "Invalid Parameters", "Please enter a valid window size.")
-                return None
-        # For other methods, no parameters
-        return params
-
-    def choose_reference_spectrum(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Reference Spectrum", "", "CSV Files (*.csv);;All Files (*)")
-        if file_path:
-            self.reference_spectrum_file = file_path
-            self.reference_spectrum_button.setText(os.path.basename(file_path))
-
-    def choose_baseline_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Baseline File", "", "CSV Files (*.csv);;All Files (*)")
-        if file_path:
-            self.baseline_file = file_path
-            self.baseline_file_button.setText(os.path.basename(file_path))'''
-
-
-# gui/panels.py
 
 class NormalizationMethodPanel(QWidget):
     def __init__(self, method_name):

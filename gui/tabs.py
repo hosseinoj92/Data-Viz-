@@ -3,7 +3,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QGridLayout, QLabel, QToolButton, QScrollArea, QSizePolicy,
     QPushButton, QHBoxLayout, QFrame, QFileDialog, QListWidgetItem, QColorDialog, QTableWidget, QHeaderView, QTableWidgetItem,
-    QMessageBox, QButtonGroup  
+    QMessageBox, QButtonGroup, QGroupBox, QVBoxLayout 
 
 )
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -21,7 +21,7 @@ import pandas as pd
 import os
 import numpy as np
 import matplotlib.text
-
+from gui.expanded_plot_window import ExpandedPlotWindow  # Ensure this import is correct
 
 ####################################
 
@@ -79,6 +79,9 @@ class CollapsibleSection(QWidget):
 
 
 class GeneralTab(QWidget):
+
+    plot_updated = pyqtSignal()  # Define the custom signal
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
@@ -152,7 +155,7 @@ class GeneralTab(QWidget):
 
         self.expand_button = QPushButton("Expand Window")
         self.expand_button.setIcon(QIcon('gui/resources/expanded_icon.png'))
-        self.expand_button.clicked.connect(self.expand_window)
+        #self.expand_button.clicked.connect(self.expand_window)
 
         self.plot_buttons_layout = QHBoxLayout()
         self.plot_buttons_layout.addWidget(self.update_button)
@@ -198,7 +201,7 @@ class GeneralTab(QWidget):
 
     def connect_signals(self):
         # Access panels
-        general_tab = self
+        #general_tab = self
 
         self.selected_data_panel.file_selector_button.clicked.connect(self.choose_files)
         self.selected_data_panel.add_file_button.clicked.connect(self.add_files)
@@ -212,6 +215,7 @@ class GeneralTab(QWidget):
     # Include all other methods (choose_files, add_files, update_plot, etc.)
     # These methods are similar to those in the original main_window.py
     # Ensure all methods are properly implemented as in the previous code
+        self.expand_button.clicked.connect(self.expand_window)
 
     def choose_files(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Select Files", self.last_directory, "CSV Files (*.csv);;All Files (*)")
@@ -280,6 +284,8 @@ class GeneralTab(QWidget):
 
     def update_plot(self):
         # Gather all parameters from panels
+        print("GeneralTab: update_plot called")  # Debugging statement
+
         data_files = self.selected_data_panel.get_selected_files()
         plot_details = self.plot_details_panel.get_plot_details()
         axis_details = self.axis_details_panel.get_axis_details()
@@ -294,6 +300,8 @@ class GeneralTab(QWidget):
                 ax.add_artist(text_item)
 
         self.canvas.draw_idle()
+        print("GeneralTab: plot_updated signal emitted") 
+        self.plot_updated.emit()
 
     def plot_2d(self):
         self.plot_type = "2D"
@@ -344,14 +352,30 @@ class GeneralTab(QWidget):
         self.data_window.show()
 
     def expand_window(self):
+        print("Expand Window button clicked.")
+
         if self.expanded_window is not None:
+            print("Expanded window already exists, bringing it to front.")
             self.expanded_window.raise_()
             return
 
         # Create a new window for the expanded plot
-        self.expanded_window = ExpandedPlotWindow(self)
-        self.expanded_window.show()
+        try:
+            print("GeneralTab: Creating a new ExpandedPlotWindow.")
+            self.expanded_window = ExpandedPlotWindow(self)
+            self.expanded_window.closed.connect(self.on_expanded_window_closed)
+            self.expanded_window.show()
+        except Exception as e:
+            print(f"GeneralTab: Error creating ExpandedPlotWindow: {e}")
 
+        # Connect to the closed signal to reset the reference
+        #self.expanded_window.destroyed.connect(self.on_expanded_window_closed)
+
+    def on_expanded_window_closed(self):
+            print("Expanded window closed.")
+            self.expanded_window = None  # Reset the reference when the window is closed
+            print("self.expanded_window has been reset to None.")
+        
     def on_click(self, event):
         if self.plot_type != "2D":
             return
@@ -469,8 +493,11 @@ class GeneralTab(QWidget):
 
 class NormalizationTab(QWidget):
 
-    def __init__(self, parent=None):
+    plot_updated = pyqtSignal()  # Define the custom signal
+
+    def __init__(self, general_tab, parent=None):
         super().__init__(parent)
+        self.general_tab = general_tab
         self.is_collapsing = False  # Flag to prevent recursive signal handling
         self.init_ui()
         self.expanded_window = None  # To track the expanded window
@@ -482,13 +509,14 @@ class NormalizationTab(QWidget):
         self.setLayout(self.layout)
 
         # Initialize last_directory
-        self.last_directory = os.path.expanduser("~")  # Add this line
+        self.last_directory = os.path.expanduser("~")  
 
         # Column 0: Selected Data and Collapsible Sections
-        self.selected_data_panel = SelectedDataPanel()
+        self.selected_data_panel = SelectedDataPanel(include_retract_button=True)
 
         # Create collapsible sections for other panels
         self.collapsible_sections = []
+
 
         # Plot Details Section
         self.plot_details_panel = PlotDetailsPanel()
@@ -520,11 +548,19 @@ class NormalizationTab(QWidget):
         additional_text_section.section_expanded.connect(self.on_section_expanded)
         self.collapsible_sections.append(additional_text_section)
 
+        # QGroupBox for Plot Handling
+        self.plot_handling_groupbox = QGroupBox("Plot Handling")
+        plot_handling_layout = QVBoxLayout()
+        self.plot_handling_groupbox.setLayout(plot_handling_layout)
+
+        # Add collapsible sections to the plot handling layout
+        for section in self.collapsible_sections:
+            plot_handling_layout.addWidget(section)
+
         # Arrange Column 0
         column0_layout = QVBoxLayout()
         column0_layout.addWidget(self.selected_data_panel)
-        for section in self.collapsible_sections:
-            column0_layout.addWidget(section)
+        column0_layout.addWidget(self.plot_handling_groupbox)
         column0_layout.addStretch()  # Push content to the top
 
         column0_widget = QWidget()
@@ -532,6 +568,7 @@ class NormalizationTab(QWidget):
         self.layout.addWidget(column0_widget, 0, 0)
 
         # Column 1: Normalization Functionalities with Collapsible Sections
+
         self.normalization_methods = [
             "Min-Max Normalization",
             "Max Normalization",
@@ -547,22 +584,45 @@ class NormalizationTab(QWidget):
         ]
 
         self.normalization_sections = []
-        column1_layout = QVBoxLayout()
-        column1_layout.setContentsMargins(0, 0, 0, 0)
-        column1_layout.setSpacing(10)
+
 
         for method_name in self.normalization_methods:
             panel = NormalizationMethodPanel(method_name)
             section = CollapsibleSection(method_name, panel)
             section.section_expanded.connect(self.on_normalization_section_expanded)
-            column1_layout.addWidget(section)
+            #column1_layout.addWidget(section)
             self.normalization_sections.append(section)
 
             # Connect Apply and Save buttons
             panel.apply_button.clicked.connect(lambda _, p=panel: self.apply_normalization(p))
             panel.save_button.clicked.connect(lambda _, p=panel: self.save_normalized_data(p))
 
+        self.basic_corrections_groupbox = QGroupBox("Basic Corrections")
+        basic_corrections_layout = QVBoxLayout()
+        self.basic_corrections_groupbox.setLayout(basic_corrections_layout)
+
+        # For now, this panel is empty
+        # You can add widgets to basic_corrections_layout in future steps
+
+        # Create "Normalization Methods" panel
+        self.normalization_methods_groupbox = QGroupBox("Normalization Methods")
+        normalization_methods_layout = QVBoxLayout()
+        self.normalization_methods_groupbox.setLayout(normalization_methods_layout)
+
+        # Add normalization sections to the normalization methods layout
+        for section in self.normalization_sections:
+            normalization_methods_layout.addWidget(section)
+
+        # Arrange Column 1
+        column1_layout = QVBoxLayout()
+        column1_layout.setContentsMargins(0, 0, 0, 0)
+        column1_layout.setSpacing(10)
+
+        # Add the "Basic Corrections" and "Normalization Methods" panels
+        column1_layout.addWidget(self.basic_corrections_groupbox)
+        column1_layout.addWidget(self.normalization_methods_groupbox)
         column1_layout.addStretch()
+
         column1_widget = QWidget()
         column1_widget.setLayout(column1_layout)
         self.layout.addWidget(column1_widget, 0, 1)
@@ -608,7 +668,7 @@ class NormalizationTab(QWidget):
 
         self.expand_button = QPushButton("Expand Window")
         self.expand_button.setIcon(QIcon('gui/resources/expanded_icon.png'))
-        self.expand_button.clicked.connect(self.expand_window)
+        #self.expand_button.clicked.connect(self.expand_window)
 
         self.plot_buttons_layout = QHBoxLayout()
         self.plot_buttons_layout.addWidget(self.update_button)
@@ -1002,7 +1062,7 @@ class NormalizationTab(QWidget):
 
     def connect_signals(self):
         # Access panels
-        normalization_tab = self
+        #normalization_tab = self
 
         self.selected_data_panel.file_selector_button.clicked.connect(self.choose_files)
         self.selected_data_panel.add_file_button.clicked.connect(self.add_files)
@@ -1012,6 +1072,13 @@ class NormalizationTab(QWidget):
         self.additional_text_panel.delete_text_button.clicked.connect(self.delete_text_from_plot)
         self.custom_annotations_panel.apply_changes_button.clicked.connect(self.apply_changes)
         self.custom_annotations_panel.calculate_distance_button.clicked.connect(self.start_distance_calculation)
+        #self.selected_data_panel.retract_button.clicked.connect(self.retract_from_general)
+        self.expand_button.clicked.connect(self.expand_window)
+
+        # Connect the "Retract from General" button if it exists
+        if hasattr(self.selected_data_panel, 'retract_button'):
+            self.selected_data_panel.retract_button.clicked.connect(self.retract_from_general)
+
 
     def on_section_expanded(self, expanded_section):
         print(f"Section '{expanded_section.toggle_button.text()}' expanded. Collapsing other sections.")
@@ -1024,52 +1091,6 @@ class NormalizationTab(QWidget):
                 print(f"Collapsing section '{section.toggle_button.text()}'")
                 section.toggle_button.setChecked(False)
         self.is_collapsing = False
-
-    def apply_normalization(self, panel):
-        # Get the selected data files
-        data_files = self.selected_data_panel.get_selected_files()
-        if not data_files:
-            QMessageBox.warning(self, "No Data Selected", "Please select data files to normalize.")
-            return
-
-        # Get normalization method index
-        method_index = self.normalization_methods.index(panel.method_name)
-        method_func = self.get_normalization_function(method_index)
-
-        if method_func is None:
-            QMessageBox.warning(self, "Invalid Method", "Selected normalization method is not implemented.")
-            return
-
-        # Get parameters from panel
-        params = panel.get_parameters()
-        if params is None:
-            return  # Error message already shown
-
-        # Apply normalization to each selected file
-        self.normalized_data = {}  # Dict to store normalized data
-        for file_path in data_files:
-            try:
-                df = pd.read_csv(file_path)
-                x_col = int(self.plot_details_panel.x_axis_col_input.text()) - 1
-                y_col = int(self.plot_details_panel.y_axis_col_input.text()) - 1
-                x = df.iloc[:, x_col].values
-                y = df.iloc[:, y_col].values
-
-                # Apply normalization
-                if method_index in [2, 3]:  # Methods that require x and y
-                    y_normalized = method_func(x, y, **params)
-                else:
-                    y_normalized = method_func(y, **params)
-
-                # Store normalized data
-                self.normalized_data[file_path] = (x, y_normalized)
-
-            except Exception as e:
-                QMessageBox.warning(self, "Error", f"Error normalizing file {file_path}: {e}")
-
-        # Update the plot with normalized data
-        self.update_normalized_plot()
-
 
                 
     def choose_files(self):
@@ -1104,6 +1125,37 @@ class NormalizationTab(QWidget):
             item.setCheckState(Qt.Checked if select_all else Qt.Unchecked)
         self.selected_data_panel.select_all_button.setText("Deselect All" if select_all else "Select All")
 
+    def retract_from_general(self):
+        # **Access the General Tab's SelectedDataPanel**  # Add this one
+        general_selected_data_panel = self.general_tab.selected_data_panel
+
+        # **Retrieve selected files from the General Tab**  # Add this one
+        selected_items = [
+            item for item in general_selected_data_panel.selected_files_list.findItems("*", Qt.MatchWildcard)
+            if item.checkState() == Qt.Checked
+        ]
+
+        if not selected_items:
+            QMessageBox.warning(self, "No Data Selected", "No files are selected in the General Tab.")
+            return
+
+        # **Clear the current selection in the Normalization Tab's SelectedDataPanel**  # Add this one
+        self.selected_data_panel.selected_files_list.clear()
+
+        # **Copy selected items from General Tab to Normalization Tab**  # Add this one
+        for item in selected_items:
+            file_path = item.data(Qt.UserRole)
+            file_name = os.path.basename(file_path)
+
+            new_item = QListWidgetItem(file_name)
+            new_item.setFlags(new_item.flags() | Qt.ItemIsUserCheckable)
+            new_item.setCheckState(Qt.Checked)  # Set as checked
+            new_item.setData(Qt.UserRole, file_path)
+
+            self.selected_data_panel.selected_files_list.addItem(new_item)
+
+        QMessageBox.information(self, "Retract Successful", "Selected files have been retracted from the General Tab.")
+    
     def delete_selected_file(self):
         selected_items = self.selected_data_panel.selected_files_list.selectedItems()
         if not selected_items:
@@ -1139,6 +1191,8 @@ class NormalizationTab(QWidget):
 
     def update_plot(self):
         # Gather all parameters from panels
+        print("Parent tab: update_plot called")
+
         data_files = self.selected_data_panel.get_selected_files()
         plot_details = self.plot_details_panel.get_plot_details()
         axis_details = self.axis_details_panel.get_axis_details()
@@ -1153,6 +1207,8 @@ class NormalizationTab(QWidget):
                 ax.add_artist(text_item)
 
         self.canvas.draw_idle()
+        print("NormalizationTab: plot_updated signal emitted")  # Debugging statement
+        self.plot_updated.emit()
 
     def plot_2d(self):
         self.plot_type = "2D"
@@ -1203,13 +1259,28 @@ class NormalizationTab(QWidget):
         self.data_window.show()
 
     def expand_window(self):
+        print("Expand Window button clicked.")
         if self.expanded_window is not None:
+            print("Expanded window already exists, bringing it to front.")
             self.expanded_window.raise_()
             return
 
-        # Create a new window for the expanded plot
-        self.expanded_window = ExpandedPlotWindow(self)
-        self.expanded_window.show()
+        # Create a new expanded window
+        try:
+            print("NormalizationTab: Creating a new ExpandedPlotWindow.")
+            self.expanded_window = ExpandedPlotWindow(self)
+            self.expanded_window.closed.connect(self.on_expanded_window_closed)
+            self.expanded_window.show()
+        except Exception as e:
+            print(f"NormalizationTab: Error creating ExpandedPlotWindow: {e}")
+
+        # Connect to the closed signal to reset the reference
+        #self.expanded_window.destroyed.connect(self.on_expanded_window_closed)
+
+    def on_expanded_window_closed(self):
+        print("Expanded window closed.")
+        self.expanded_window = None
+        print("self.expanded_window has been reset to None.")
 
     def on_click(self, event):
         if self.plot_type != "2D":
@@ -1325,56 +1396,3 @@ class NormalizationTab(QWidget):
         self.selected_lines.clear()
         self.canvas.draw_idle()
 
-
-class ExpandedPlotWindow(QWidget):
-    def __init__(self, parent_tab):
-        super().__init__()
-        self.parent_tab = parent_tab
-        self.setWindowTitle("Expanded Plot")
-        self.setGeometry(150, 150, 1200, 800)
-
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
-
-        # Matplotlib Figure and Canvas for expanded window
-        self.expanded_figure = plt.figure()
-        self.expanded_canvas = FigureCanvas(self.expanded_figure)
-        self.expanded_toolbar = NavigationToolbar(self.expanded_canvas, self)
-
-        self.layout.addWidget(self.expanded_toolbar)
-        self.layout.addWidget(self.expanded_canvas)
-
-        # Copy current plot to the expanded plot
-        self.update_expanded_plot()
-
-        # Connect to parent's update_plot to keep expanded window in sync
-        self.parent_tab.canvas.mpl_connect('draw_event', self.update_expanded_plot)
-
-    def update_expanded_plot(self, event=None):
-        # Clear the expanded figure and redraw
-        self.expanded_figure.clear()
-        ax = self.expanded_figure.add_subplot(111, projection='3d' if self.parent_tab.plot_type == "3D" else None)
-
-        # Re-plot using the same data and settings
-        data_files = self.parent_tab.selected_data_panel.get_selected_files()
-        plot_details = self.parent_tab.plot_details_panel.get_plot_details()
-        axis_details = self.parent_tab.axis_details_panel.get_axis_details()  # Corrected line
-        plot_visuals = self.parent_tab.plot_visuals_panel.get_plot_visuals()
-        plot_type = self.parent_tab.plot_type
-
-        plot_data(self.expanded_figure, data_files, plot_details, axis_details, plot_visuals, is_3d=(plot_type == "3D"))
-
-        # Re-add annotations
-        for ann in self.parent_tab.annotations:
-            if isinstance(ann, tuple):
-                # It's a (star, text) tuple
-                star, text = ann
-                ax.plot(star.get_xdata(), star.get_ydata(), marker='*', color='black', markersize=10)
-                ax.text(text.get_position()[0], text.get_position()[1], text.get_text(),
-                        fontsize=10, color='black', ha='left')
-            elif isinstance(ann, plt.Line2D):
-                ax.add_line(ann)
-            elif isinstance(ann, matplotlib.text.Annotation):
-                ax.add_artist(ann)
-
-        self.expanded_canvas.draw_idle()
