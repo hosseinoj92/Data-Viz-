@@ -3,7 +3,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QGridLayout, QLabel, QToolButton, QScrollArea, QSizePolicy,
     QPushButton, QHBoxLayout, QFrame, QFileDialog, QListWidgetItem, QColorDialog, QTableWidget, QHeaderView, QTableWidgetItem,
-    QMessageBox, QButtonGroup, QGroupBox, QVBoxLayout 
+    QMessageBox, QButtonGroup, QGroupBox, QVBoxLayout, QDialog
 
 )
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -22,6 +22,7 @@ import os
 import numpy as np
 import matplotlib.text
 from gui.expanded_plot_window import ExpandedPlotWindow  # Ensure this import is correct
+from gui.save_plot_dialog import SavePlotDialog
 
 ####################################
 
@@ -154,8 +155,12 @@ class GeneralTab(QWidget):
         self.plot_type_3d_button.clicked.connect(self.plot_3d)
 
         self.expand_button = QPushButton("Expand Window")
-        self.expand_button.setIcon(QIcon('gui/resources/expanded_icon.png'))
-        #self.expand_button.clicked.connect(self.expand_window)
+        self.expand_button.setIcon(QIcon('gui/resources/expand2_icon.png'))  # Set new expand icon
+        self.expand_button.clicked.connect(self.expand_window)
+
+        self.save_plot_button = QPushButton("Save Plot")  # New Save Plot Button
+        self.save_plot_button.setIcon(QIcon('gui/resources/save_icon.png'))  # Optional: add an icon
+        self.save_plot_button.clicked.connect(self.save_plot_with_options)
 
         self.plot_buttons_layout = QHBoxLayout()
         self.plot_buttons_layout.addWidget(self.update_button)
@@ -163,6 +168,7 @@ class GeneralTab(QWidget):
         self.plot_buttons_layout.addWidget(self.plot_type_3d_button)
         self.plot_buttons_layout.addWidget(self.show_data_structure_button)
         self.plot_buttons_layout.addWidget(self.expand_button)
+        self.plot_buttons_layout.addWidget(self.save_plot_button)
 
         plot_layout.addLayout(self.plot_buttons_layout)
 
@@ -490,6 +496,62 @@ class GeneralTab(QWidget):
         self.selected_lines.clear()
         self.canvas.draw_idle()
 
+    def save_plot_with_options(self):
+        print("Save Plot button clicked.")
+        dialog = SavePlotDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            width_pixels, height_pixels, quality = dialog.get_values()
+            print(f"Saving plot with width: {width_pixels}px, height: {height_pixels}px, quality: {quality}")
+            self.save_plot(width_pixels, height_pixels, quality)
+            
+    def save_plot(self, width_pixels, height_pixels, quality):
+    # Map quality to dpi
+        quality_dpi_mapping = {
+            "Low": 72,
+            "Medium": 150,
+            "High": 300,
+            "Very High": 600
+        }
+        dpi = quality_dpi_mapping.get(quality, 150)  # Default to 150 DPI if not found
+        
+        # Keep the figure size in inches based on width and height
+        width_in = width_pixels / 100  # Convert pixels to "figure inches" (for matplotlib size control)
+        height_in = height_pixels / 100  # Same conversion
+        
+        # Store original figure size and DPI
+        original_size = self.figure.get_size_inches()
+        original_dpi = self.figure.get_dpi()
+
+        # Set the figure size to the new dimensions in inches
+        self.figure.set_size_inches(width_in, height_in)
+        
+        # Define the file path
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, 
+            "Save Plot", 
+            "", 
+            "PNG Files (*.png);;JPEG Files (*.jpg);;All Files (*)", 
+            options=options
+        )
+        if file_path:
+            try:
+                # Save the figure with the specified DPI, affecting only the quality (sharpness) not the size
+                self.figure.savefig(file_path, dpi=dpi)
+                QMessageBox.information(self, "Save Successful", f"Plot saved successfully at:\n{file_path}")
+                print(f"Plot saved successfully at: {file_path}")
+            except Exception as e:
+                QMessageBox.warning(self, "Save Failed", f"Failed to save plot:\n{e}")
+                print(f"Failed to save plot: {e}")
+        
+        # Restore original figure size and DPI after saving to avoid affecting the interactive plot
+        self.figure.set_size_inches(original_size)
+        self.figure.set_dpi(original_dpi)
+        
+        # Redraw the canvas to make sure the interactive plot looks normal after saving
+        self.canvas.draw_idle()
+        print("Figure size and DPI restored to original after saving.")
+
 
 class NormalizationTab(QWidget):
 
@@ -667,8 +729,12 @@ class NormalizationTab(QWidget):
         self.plot_type_3d_button.clicked.connect(self.plot_3d)
 
         self.expand_button = QPushButton("Expand Window")
-        self.expand_button.setIcon(QIcon('gui/resources/expanded_icon.png'))
-        #self.expand_button.clicked.connect(self.expand_window)
+        self.expand_button.setIcon(QIcon('gui/resources/expand2_icon.png'))  # Set new expand icon
+        self.expand_button.clicked.connect(self.expand_window)
+
+        self.save_plot_button = QPushButton("Save Plot")  # New Save Plot Button
+        self.save_plot_button.setIcon(QIcon('gui/resources/save_icon.png'))  # Optional: add an icon
+        self.save_plot_button.clicked.connect(self.save_plot_with_options)
 
         self.plot_buttons_layout = QHBoxLayout()
         self.plot_buttons_layout.addWidget(self.update_button)
@@ -676,6 +742,7 @@ class NormalizationTab(QWidget):
         self.plot_buttons_layout.addWidget(self.plot_type_3d_button)
         self.plot_buttons_layout.addWidget(self.show_data_structure_button)
         self.plot_buttons_layout.addWidget(self.expand_button)
+        self.plot_buttons_layout.addWidget(self.save_plot_button)
 
         plot_layout.addLayout(self.plot_buttons_layout)
 
@@ -1395,4 +1462,61 @@ class NormalizationTab(QWidget):
 
         self.selected_lines.clear()
         self.canvas.draw_idle()
+
+    def save_plot_with_options(self):
+        print("Save Plot button clicked.")
+        dialog = SavePlotDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            width_pixels, height_pixels, quality = dialog.get_values()
+            print(f"Saving plot with width: {width_pixels}px, height: {height_pixels}px, quality: {quality}")
+            self.save_plot(width_pixels, height_pixels, quality)
+
+    def save_plot(self, width_pixels, height_pixels, quality):
+    # Map quality to dpi
+        quality_dpi_mapping = {
+            "Low": 72,
+            "Medium": 150,
+            "High": 300,
+            "Very High": 600
+        }
+        dpi = quality_dpi_mapping.get(quality, 150)  # Default to 150 DPI if not found
+        
+        # Keep the figure size in inches based on width and height
+        width_in = width_pixels / 100  # Convert pixels to "figure inches" (for matplotlib size control)
+        height_in = height_pixels / 100  # Same conversion
+        
+        # Store original figure size and DPI
+        original_size = self.figure.get_size_inches()
+        original_dpi = self.figure.get_dpi()
+
+        # Set the figure size to the new dimensions in inches
+        self.figure.set_size_inches(width_in, height_in)
+        
+        # Define the file path
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, 
+            "Save Plot", 
+            "", 
+            "PNG Files (*.png);;JPEG Files (*.jpg);;All Files (*)", 
+            options=options
+        )
+        if file_path:
+            try:
+                # Save the figure with the specified DPI, affecting only the quality (sharpness) not the size
+                self.figure.savefig(file_path, dpi=dpi)
+                QMessageBox.information(self, "Save Successful", f"Plot saved successfully at:\n{file_path}")
+                print(f"Plot saved successfully at: {file_path}")
+            except Exception as e:
+                QMessageBox.warning(self, "Save Failed", f"Failed to save plot:\n{e}")
+                print(f"Failed to save plot: {e}")
+        
+        # Restore original figure size and DPI after saving to avoid affecting the interactive plot
+        self.figure.set_size_inches(original_size)
+        self.figure.set_dpi(original_dpi)
+        
+        # Redraw the canvas to make sure the interactive plot looks normal after saving
+        self.canvas.draw_idle()
+        print("Figure size and DPI restored to original after saving.")
+
 
