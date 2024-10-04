@@ -23,6 +23,8 @@ import numpy as np
 import matplotlib.text
 from gui.expanded_plot_window import ExpandedPlotWindow  # Ensure this import is correct
 from gui.save_plot_dialog import SavePlotDialog
+import seaborn as sns
+from matplotlib import style
 
 ####################################
 
@@ -556,6 +558,58 @@ class GeneralTab(QWidget):
         self.selected_lines.clear()
         self.canvas.draw_idle()
 
+    def apply_style_to_axes(self, ax, style_dict):
+    # Apply style parameters to the axes
+        for key, value in style_dict.items():
+            if key.startswith('axes.'):
+                param_name = key[5:]  # Remove 'axes.' prefix
+                if param_name == 'facecolor':
+                    ax.set_facecolor(value)
+                elif param_name == 'edgecolor':
+                    for spine in ax.spines.values():
+                        spine.set_edgecolor(value)
+                elif param_name == 'labelcolor':
+                    ax.xaxis.label.set_color(value)
+                    ax.yaxis.label.set_color(value)
+                elif param_name == 'titlesize':
+                    ax.title.set_fontsize(value)
+                elif param_name == 'titleweight':
+                    ax.title.set_fontweight(value)
+                # Add more axes-related styles as needed
+            elif key.startswith('xtick.'):
+                param_name = key[6:]  # Remove 'xtick.' prefix
+                if param_name == 'color':
+                    ax.tick_params(axis='x', colors=value)
+                elif param_name == 'labelsize':
+                    ax.tick_params(axis='x', labelsize=value)
+                # Add more xtick-related styles as needed
+            elif key.startswith('ytick.'):
+                param_name = key[6:]  # Remove 'ytick.' prefix
+                if param_name == 'color':
+                    ax.tick_params(axis='y', colors=value)
+                elif param_name == 'labelsize':
+                    ax.tick_params(axis='y', labelsize=value)
+                # Add more ytick-related styles as needed
+            elif key == 'grid.color':
+                ax.grid(True, color=value)
+            elif key == 'grid.linestyle':
+                ax.grid(True, linestyle=value)
+            elif key == 'grid.linewidth':
+                ax.grid(True, linewidth=value)
+            elif key == 'lines.linewidth':
+                pass  # Handled in plot function
+            elif key == 'lines.linestyle':
+                pass  # Handled in plot function
+            elif key == 'text.color':
+                ax.title.set_color(value)
+                ax.xaxis.label.set_color(value)
+                ax.yaxis.label.set_color(value)
+                for text in ax.texts:
+                    text.set_color(value)
+            # Handle other style parameters as needed
+
+
+
     def save_plot_with_options(self):
         print("Save Plot button clicked.")
         dialog = SavePlotDialog(self)
@@ -629,13 +683,13 @@ class GeneralTab(QWidget):
         self.figure.clear()
 
         # Determine the layout based on user settings
-        if self.layout_settings['auto_layout']:
+        if self.layout_settings.get('auto_layout', False):
             num_subplots = len(self.subplot_configs_data)
             cols = int(np.ceil(np.sqrt(num_subplots)))
             rows = int(np.ceil(num_subplots / cols))
         else:
-            rows = self.layout_settings['rows']
-            cols = self.layout_settings['columns']
+            rows = self.layout_settings.get('rows', 1)
+            cols = self.layout_settings.get('columns', 1)
 
         # Set figure size based on the number of rows and columns
         self.figure.set_size_inches(5 * cols, 4 * rows)
@@ -657,8 +711,7 @@ class GeneralTab(QWidget):
 
             ax = axes[idx]
             try:
-                # No need to call get_config(), config is already a dict
-                # Apply advanced options
+                # Extract advanced options
                 advanced_options = config.get('advanced_options', {})
                 line_style = {
                     'Solid': '-',
@@ -677,17 +730,24 @@ class GeneralTab(QWidget):
                 }.get(advanced_options.get('point_style', 'None'), '')
                 line_thickness = int(advanced_options.get('line_thickness', 2))
                 scale_type = advanced_options.get('scale_type', 'Linear')
+                plot_style = advanced_options.get('plot_style', 'default')
+
+                # Retrieve the style dictionary
+                style_dict = plt.style.library.get(plot_style, {})
+
+                # Apply style parameters to the axes
+                self.apply_style_to_axes(ax, style_dict)
 
                 # Plot datasets
                 for dataset_config in config['datasets']:
                     df = pd.read_csv(dataset_config['dataset'])
-                    x = df.iloc[:, dataset_config['x_column']]
-                    y = df.iloc[:, dataset_config['y_column']]
+                    x = df.iloc[:, int(dataset_config['x_column'])]
+                    y = df.iloc[:, int(dataset_config['y_column'])]
                     label = dataset_config['legend_label']
                     ax.plot(
                         x, y, label=rf"{label}",
                         linestyle=line_style,
-                        marker=point_style,
+                        marker=point_style if point_style != '' else None,
                         linewidth=line_thickness
                     )
 
@@ -732,7 +792,7 @@ class GeneralTab(QWidget):
                 if not hasattr(ax, 'annotations'):
                     ax.annotations = []
 
-                # Store the subplot index in the axes object for event handling
+                # Store the subplot index in the axes object for event handling (optional)
                 ax.subplot_index = idx
 
             except Exception as e:
@@ -750,7 +810,6 @@ class GeneralTab(QWidget):
 
         # Render the updated plot
         self.canvas.draw_idle()
-
 
 
 
@@ -1832,6 +1891,8 @@ class SubplotsConfigDialog(QDialog):
 
     
 
+# In SubplotConfigWidget within tabs.py
+
 class SubplotConfigWidget(QWidget):
     def __init__(self, general_tab, parent=None):
         super().__init__(parent)
@@ -1952,11 +2013,14 @@ class SubplotConfigWidget(QWidget):
 
     def open_advanced_options_dialog(self):
         dialog = SubplotAdvancedOptionsDialog(self)
+        # Pre-populate dialog with existing advanced options
+        dialog.set_advanced_options(self.advanced_options)
         if dialog.exec_() == QDialog.Accepted:
             # Retrieve the advanced options from the dialog
             self.advanced_options = dialog.get_advanced_options()
         else:
             pass  # Do nothing if canceled
+
 
     def add_dataset(self):
         dataset_widget = DatasetConfigWidget(self.general_tab, self)
@@ -1978,17 +2042,17 @@ class SubplotConfigWidget(QWidget):
         config['y_axis_label'] = self.y_axis_label_input.text()
         config['enable_grid'] = self.enable_grid_checkbox.isChecked()
         config['enable_legend'] = self.enable_legend_checkbox.isChecked()
-        
+
         # Map legend location to Matplotlib value
         legend_location_display = self.legend_location_dropdown.currentText()
         legend_location = self.legend_location_mapping.get(legend_location_display, 'best')
         config['legend_location'] = legend_location
-        
+
         config['legend_font_size'] = self.legend_font_size_spinbox.value()
         config['datasets'] = []
 
-        # Add advanced options to config
-        config['advanced_options'] = self.advanced_options  # This will be an empty dict if not set
+        # Include advanced options
+        config['advanced_options'] = self.advanced_options  # Add this line
 
         for i in range(self.datasets_container.count()):
             dataset_widget = self.datasets_container.itemAt(i).widget()
@@ -1998,6 +2062,8 @@ class SubplotConfigWidget(QWidget):
                     config['datasets'].append(dataset_config)
 
         return config
+
+
 
 
 class DatasetConfigWidget(QWidget):
@@ -2123,6 +2189,16 @@ class SubplotAdvancedOptionsDialog(QDialog):
         scale_type_layout.addWidget(self.scale_type_combo)
         layout.addLayout(scale_type_layout)
 
+        # Plot Style
+        plot_style_layout = QHBoxLayout()
+        plot_style_layout.addWidget(QLabel("Plot Style:"))
+        self.plot_style_combo = QComboBox()
+        # Dynamically get available styles from Matplotlib
+        available_styles = plt.style.available
+        self.plot_style_combo.addItems(available_styles)
+        plot_style_layout.addWidget(self.plot_style_combo)
+        layout.addLayout(plot_style_layout)
+
         # Action Buttons
         buttons_layout = QHBoxLayout()
         self.ok_button = QPushButton("OK")
@@ -2133,15 +2209,24 @@ class SubplotAdvancedOptionsDialog(QDialog):
         buttons_layout.addWidget(self.ok_button)
         buttons_layout.addWidget(self.cancel_button)
         layout.addLayout(buttons_layout)
-        
 
         self.setLayout(layout)
+
+    def set_advanced_options(self, options):
+        # Set the dialog widgets based on the provided options
+        self.line_style_combo.setCurrentText(options.get('line_style', 'Solid'))
+        self.point_style_combo.setCurrentText(options.get('point_style', 'None'))
+        self.line_thickness_spinbox.setValue(options.get('line_thickness', 2))
+        self.scale_type_combo.setCurrentText(options.get('scale_type', 'Linear'))
+        self.plot_style_combo.setCurrentText(options.get('plot_style', 'default'))
 
     def get_advanced_options(self):
         options = {
             'line_style': self.line_style_combo.currentText(),
             'point_style': self.point_style_combo.currentText(),
             'line_thickness': self.line_thickness_spinbox.value(),
-            'scale_type': self.scale_type_combo.currentText()
+            'scale_type': self.scale_type_combo.currentText(),
+            'plot_style': self.plot_style_combo.currentText()
         }
         return options
+
