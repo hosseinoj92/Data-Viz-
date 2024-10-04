@@ -3,7 +3,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QGridLayout, QLabel, QToolButton, QScrollArea, QSizePolicy,
     QPushButton, QHBoxLayout, QFrame, QFileDialog, QListWidgetItem, QColorDialog, QTableWidget, QHeaderView, QTableWidgetItem,
-    QMessageBox, QButtonGroup, QGroupBox, QVBoxLayout, QDialog
+    QMessageBox, QButtonGroup, QGroupBox, QVBoxLayout, QDialog, QComboBox, QSpinBox, QCheckBox, QLineEdit  
 
 )
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -158,9 +158,14 @@ class GeneralTab(QWidget):
         self.expand_button.setIcon(QIcon('gui/resources/expand2_icon.png'))  # Set new expand icon
         self.expand_button.clicked.connect(self.expand_window)
 
-        self.save_plot_button = QPushButton("Save Plot")  # New Save Plot Button
+        self.save_plot_button = QPushButton("Save Plot")  
         self.save_plot_button.setIcon(QIcon('gui/resources/save_icon.png'))  # Optional: add an icon
         self.save_plot_button.clicked.connect(self.save_plot_with_options)
+
+        self.configure_subplots_button = QPushButton("Configure Subplots")  
+        self.configure_subplots_button.setIcon(QIcon('gui/resources/configure_subplots_icon.png')) 
+        self.configure_subplots_button.clicked.connect(self.open_subplots_config_dialog)  
+       
 
         self.plot_buttons_layout = QHBoxLayout()
         self.plot_buttons_layout.addWidget(self.update_button)
@@ -169,6 +174,7 @@ class GeneralTab(QWidget):
         self.plot_buttons_layout.addWidget(self.show_data_structure_button)
         self.plot_buttons_layout.addWidget(self.expand_button)
         self.plot_buttons_layout.addWidget(self.save_plot_button)
+        self.plot_buttons_layout.addWidget(self.configure_subplots_button)
 
         plot_layout.addLayout(self.plot_buttons_layout)
 
@@ -196,6 +202,8 @@ class GeneralTab(QWidget):
         self.canvas.mpl_connect('button_press_event', self.on_click)
         self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
 
+
+
         # Update the plot_frame stylesheet
         self.plot_frame.setStyleSheet("""
             #PlotFrame {
@@ -205,6 +213,12 @@ class GeneralTab(QWidget):
             }
         """)
 
+        configure_subplots_icon_path = os.path.join(os.path.dirname(__file__), 'resources', 'configure_subplots_icon.png')  # New
+        if os.path.exists(configure_subplots_icon_path):  # New
+            self.configure_subplots_button.setIcon(QIcon(configure_subplots_icon_path))  # New
+        else:  # New
+            print(f"Warning: Configure Subplots icon not found at {configure_subplots_icon_path}")  # New
+   
     def connect_signals(self):
         # Access panels
         #general_tab = self
@@ -551,6 +565,97 @@ class GeneralTab(QWidget):
         # Redraw the canvas to make sure the interactive plot looks normal after saving
         self.canvas.draw_idle()
         print("Figure size and DPI restored to original after saving.")
+
+    def open_subplots_config_dialog(self):
+        dialog = SubplotsConfigDialog(self)  # Pass self (GeneralTab) as parent
+        if dialog.exec_() == QDialog.Accepted:
+            self.subplot_configs = dialog.get_subplot_configs()
+            self.layout_settings = dialog.get_layout_settings()
+            self.update_plot_with_subplots()
+
+    def update_plot_with_subplots(self):
+        if not hasattr(self, 'subplot_configs') or not self.subplot_configs:
+            self.update_plot()  # Use existing plotting if no subplots are configured
+            return
+
+        # Clear the existing figure
+        self.figure.clear()
+
+        # Determine the layout based on user settings
+        if self.layout_settings['auto_layout']:
+            num_subplots = len(self.subplot_configs)
+            cols = int(np.ceil(np.sqrt(num_subplots)))
+            rows = int(np.ceil(num_subplots / cols))
+        else:
+            rows = self.layout_settings['rows']
+            cols = self.layout_settings['columns']
+
+        # Set figure size based on the number of rows and columns
+        self.figure.set_size_inches(5 * cols, 4 * rows)
+
+        # Create subplots without specifying figsize again
+        try:
+            axes = self.figure.subplots(rows, cols)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to create subplots: {e}")
+            return
+
+        # Flatten the axes array for easy iteration
+        if rows == 1 and cols == 1:
+            axes = [axes]
+        elif rows == 1 or cols == 1:
+            axes = axes.flatten()
+        else:
+            axes = axes.flatten()
+
+        # Iterate through each subplot configuration
+        for idx, config in enumerate(self.subplot_configs):
+            if idx >= len(axes):
+                break  # Prevent index out of range if more subplots are configured than available axes
+
+            ax = axes[idx]
+            try:
+                print(f"Subplot {idx + 1} Config: {config}")  # Debug statement
+
+                # Iterate through each dataset in the subplot
+                for dataset_config in config['datasets']:
+                    print(f"  Dataset Config: {dataset_config}")  # Debug statement
+
+                    df = pd.read_csv(dataset_config['dataset'])
+                    x = df.iloc[:, dataset_config['x_column']]
+                    y = df.iloc[:, dataset_config['y_column']]
+                    label = dataset_config['legend_label']
+                    ax.plot(x, y, label=label, linewidth=2)
+
+                # Set axis labels
+                ax.set_xlabel(config.get('x_axis_label', ''), fontsize=12)
+                ax.set_ylabel(config.get('y_axis_label', ''), fontsize=12)
+
+                # Set subplot title with customizable font size
+                ax.set_title(config.get('subplot_title', f"Subplot {idx + 1}"), fontsize=config.get('title_font_size', 14))
+
+                # Enable legend if required with customizable font size
+                if config.get('enable_legend'):
+                    legend_location = config.get('legend_location', 'best')
+                    print(f"Creating legend for Subplot {idx + 1} at location '{legend_location}'")
+                    ax.legend(loc=legend_location, fontsize=config.get('legend_font_size', 10))
+                else:
+                    print(f"Legend not enabled for Subplot {idx + 1}")
+
+                # Enable grid if required
+                if config.get('enable_grid'):
+                    print(f"Enabling grid for Subplot {idx + 1}")
+                    ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+                    ax.minorticks_on()  # Enable minor ticks
+                    # Optional: Customize minor tick appearance
+                    ax.tick_params(which='minor', length=4, color='gray')
+                else:
+                    print(f"Grid not enabled for Subplot {idx + 1}")
+
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to plot Subplot {idx + 1}: {e}")
+
+
 
 
 class NormalizationTab(QWidget):
@@ -1520,3 +1625,341 @@ class NormalizationTab(QWidget):
         print("Figure size and DPI restored to original after saving.")
 
 
+
+class SubplotsConfigDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Configure Subplots")
+        self.subplot_configs = []  # To store subplot configurations
+        self.layout_settings = {'rows': 1, 'columns': 1, 'auto_layout': False}
+        self.general_tab = parent  # Store the reference to GeneralTab
+
+        self.init_ui()
+
+    def init_ui(self):
+        self.main_layout = QVBoxLayout()
+
+        # Buttons to add/remove subplots
+        buttons_layout = QHBoxLayout()
+        self.add_subplot_button = QPushButton("Add Subplot")
+        self.add_subplot_button.clicked.connect(self.add_subplot)
+        self.remove_subplot_button = QPushButton("Remove Selected Subplot")
+        self.remove_subplot_button.clicked.connect(self.remove_selected_subplots)
+        buttons_layout.addWidget(self.add_subplot_button)
+        buttons_layout.addWidget(self.remove_subplot_button)
+        self.main_layout.addLayout(buttons_layout)
+
+        # Scroll area to hold subplot configurations
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.subplots_container = QWidget()
+        self.subplots_layout = QVBoxLayout()
+        self.subplots_container.setLayout(self.subplots_layout)
+        self.scroll_area.setWidget(self.subplots_container)
+        self.main_layout.addWidget(self.scroll_area)
+
+        # Layout settings
+        layout_settings_group = QGroupBox("Layout Settings")
+        layout_settings_layout = QHBoxLayout()
+        layout_settings_group.setLayout(layout_settings_layout)
+
+        self.rows_spinbox = QSpinBox()
+        self.rows_spinbox.setMinimum(1)
+        self.rows_spinbox.setValue(1)
+        self.columns_spinbox = QSpinBox()
+        self.columns_spinbox.setMinimum(1)
+        self.columns_spinbox.setValue(1)
+        self.auto_layout_checkbox = QCheckBox("Auto Layout")
+        self.auto_layout_checkbox.stateChanged.connect(self.toggle_layout_inputs)
+
+        layout_settings_layout.addWidget(QLabel("Rows:"))
+        layout_settings_layout.addWidget(self.rows_spinbox)
+        layout_settings_layout.addWidget(QLabel("Columns:"))
+        layout_settings_layout.addWidget(self.columns_spinbox)
+        layout_settings_layout.addWidget(self.auto_layout_checkbox)
+
+        self.main_layout.addWidget(layout_settings_group)
+
+        # Action buttons
+        action_buttons_layout = QHBoxLayout()
+        self.apply_button = QPushButton("Apply")
+        self.apply_button.clicked.connect(self.accept)
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.clicked.connect(self.reject)
+        action_buttons_layout.addStretch()
+        action_buttons_layout.addWidget(self.apply_button)
+        action_buttons_layout.addWidget(self.cancel_button)
+        self.main_layout.addLayout(action_buttons_layout)
+
+        self.setLayout(self.main_layout)
+
+    def toggle_layout_inputs(self, state):
+        if state == Qt.Checked:
+            self.rows_spinbox.setEnabled(False)
+            self.columns_spinbox.setEnabled(False)
+        else:
+            self.rows_spinbox.setEnabled(True)
+            self.columns_spinbox.setEnabled(True)
+
+    def add_subplot(self):
+        subplot_config_widget = SubplotConfigWidget(self.general_tab, self)
+        self.subplots_layout.addWidget(subplot_config_widget)
+        self.subplot_configs.append(subplot_config_widget)
+        # Automatically add an initial dataset to prevent crashes
+        subplot_config_widget.add_dataset()
+
+    def remove_selected_subplots(self):
+        to_remove = []
+        for subplot in self.subplot_configs:
+            if subplot.remove_checkbox.isChecked():
+                self.subplots_layout.removeWidget(subplot)
+                subplot.deleteLater()
+                to_remove.append(subplot)
+        for subplot in to_remove:
+            self.subplot_configs.remove(subplot)
+
+    def get_subplot_configs(self):
+        configs = []
+        for subplot in self.subplot_configs:
+            config = subplot.get_config()
+            if config and config['datasets']:
+                configs.append(config)
+        return configs
+
+    def get_layout_settings(self):
+        return {
+            'rows': self.rows_spinbox.value(),
+            'columns': self.columns_spinbox.value(),
+            'auto_layout': self.auto_layout_checkbox.isChecked()
+        }
+
+    
+
+class SubplotConfigWidget(QWidget):
+    def __init__(self, general_tab, parent=None):
+        super().__init__(parent)
+        self.general_tab = general_tab  # Store the GeneralTab reference
+
+        self.legend_location_mapping = {  # Add this mapping
+            "Best": "best",
+            "Upper Right": "upper right",
+            "Upper Left": "upper left",
+            "Lower Left": "lower left",
+            "Lower Right": "lower right",
+            "Right": "right",
+            "Center Left": "center left",
+            "Center Right": "center right",
+            "Lower Center": "lower center",
+            "Upper Center": "upper center",
+            "Center": "center"
+        }
+
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        # Title for the subplot
+        subplot_title_layout = QHBoxLayout()
+        subplot_title_layout.addWidget(QLabel("Subplot Title:"))
+        self.title_input = QLineEdit()
+        self.title_input.setPlaceholderText("Enter subplot title")
+        subplot_title_layout.addWidget(self.title_input)
+        layout.addLayout(subplot_title_layout)
+
+        # Font size for subplot title
+        title_font_size_layout = QHBoxLayout()
+        title_font_size_layout.addWidget(QLabel("Title Font Size:"))
+        self.title_font_size_spinbox = QSpinBox()
+        self.title_font_size_spinbox.setRange(6, 24)
+        self.title_font_size_spinbox.setValue(14)
+        title_font_size_layout.addWidget(self.title_font_size_spinbox)
+        layout.addLayout(title_font_size_layout)
+
+        # X Axis Label
+        x_axis_layout = QHBoxLayout()
+        x_axis_layout.addWidget(QLabel("X Axis Label:"))
+        self.x_axis_label_input = QLineEdit()
+        self.x_axis_label_input.setPlaceholderText("Enter X axis label")
+        x_axis_layout.addWidget(self.x_axis_label_input)
+        layout.addLayout(x_axis_layout)
+
+        # Y Axis Label
+        y_axis_layout = QHBoxLayout()
+        y_axis_layout.addWidget(QLabel("Y Axis Label:"))
+        self.y_axis_label_input = QLineEdit()
+        self.y_axis_label_input.setPlaceholderText("Enter Y axis label")
+        y_axis_layout.addWidget(self.y_axis_label_input)
+        layout.addLayout(y_axis_layout)
+
+        # Container for multiple DatasetConfigWidgets
+        self.datasets_container = QVBoxLayout()
+        layout.addLayout(self.datasets_container)
+
+        # Buttons to add/remove datasets
+        datasets_buttons_layout = QHBoxLayout()
+        self.add_dataset_button = QPushButton("Add Dataset")
+        self.add_dataset_button.clicked.connect(self.add_dataset)
+        self.remove_dataset_button = QPushButton("Remove Selected Dataset")
+        self.remove_dataset_button.clicked.connect(self.remove_selected_datasets)
+        datasets_buttons_layout.addWidget(self.add_dataset_button)
+        datasets_buttons_layout.addWidget(self.remove_dataset_button)
+        layout.addLayout(datasets_buttons_layout)
+
+        # Grid Options
+        grid_layout = QHBoxLayout()
+        self.enable_grid_checkbox = QCheckBox("Enable Grid")
+        self.enable_grid_checkbox.setChecked(True)  # Set default to checked
+        grid_layout.addWidget(self.enable_grid_checkbox)
+        layout.addLayout(grid_layout)
+
+        # Legend Options
+        legend_layout = QHBoxLayout()
+        self.enable_legend_checkbox = QCheckBox("Enable Legend")
+        self.enable_legend_checkbox.setChecked(True)  # Set default to checked
+        legend_layout.addWidget(self.enable_legend_checkbox)
+        legend_layout.addWidget(QLabel("Legend Location:"))
+        self.legend_location_dropdown = QComboBox()
+        self.legend_location_dropdown.addItems([
+            "Best", "Upper Right", "Upper Left", "Lower Left",
+            "Lower Right", "Right", "Center Left", "Center Right",
+            "Lower Center", "Upper Center", "Center"
+        ])
+        legend_layout.addWidget(self.legend_location_dropdown)
+        layout.addLayout(legend_layout)
+
+        # Legend Font Size
+        legend_size_layout = QHBoxLayout()
+        legend_size_layout.addWidget(QLabel("Legend Font Size:"))
+        self.legend_font_size_spinbox = QSpinBox()
+        self.legend_font_size_spinbox.setRange(6, 24)
+        self.legend_font_size_spinbox.setValue(10)
+        legend_size_layout.addWidget(self.legend_font_size_spinbox)
+        layout.addLayout(legend_size_layout)
+
+        # Remove Subplot Checkbox
+        remove_layout = QHBoxLayout()
+        self.remove_checkbox = QCheckBox("Remove Subplot")
+        remove_layout.addStretch()
+        remove_layout.addWidget(self.remove_checkbox)
+        layout.addLayout(remove_layout)
+
+        self.setLayout(layout)
+
+    def add_dataset(self):
+        dataset_widget = DatasetConfigWidget(self.general_tab, self)
+        self.datasets_container.addWidget(dataset_widget)
+
+    def remove_selected_datasets(self):
+        # Iterate in reverse to safely remove widgets while iterating
+        for i in reversed(range(self.datasets_container.count())):
+            dataset_widget = self.datasets_container.itemAt(i).widget()
+            if dataset_widget and dataset_widget.remove_checkbox.isChecked():
+                self.datasets_container.removeWidget(dataset_widget)
+                dataset_widget.deleteLater()
+
+    def get_config(self):
+        config = {}
+        config['subplot_title'] = self.title_input.text()
+        config['title_font_size'] = self.title_font_size_spinbox.value()
+        config['x_axis_label'] = self.x_axis_label_input.text()
+        config['y_axis_label'] = self.y_axis_label_input.text()
+        config['enable_grid'] = self.enable_grid_checkbox.isChecked()
+        config['enable_legend'] = self.enable_legend_checkbox.isChecked()
+        
+        # Map legend location to Matplotlib value
+        legend_location_display = self.legend_location_dropdown.currentText()
+        legend_location = self.legend_location_mapping.get(legend_location_display, 'best')
+        config['legend_location'] = legend_location
+        
+        config['legend_font_size'] = self.legend_font_size_spinbox.value()
+        config['datasets'] = []
+
+        for i in range(self.datasets_container.count()):
+            dataset_widget = self.datasets_container.itemAt(i).widget()
+            if dataset_widget:
+                dataset_config = dataset_widget.get_config()
+                if dataset_config['dataset']:
+                    config['datasets'].append(dataset_config)
+
+        return config
+        
+
+class DatasetConfigWidget(QWidget):
+    def __init__(self, general_tab, parent=None):
+        super().__init__(parent)
+        self.general_tab = general_tab  # Store the GeneralTab reference
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QHBoxLayout()
+
+        # Dataset selection
+        layout.addWidget(QLabel("Dataset:"))
+        self.dataset_dropdown = QComboBox()
+        self.dataset_dropdown.currentIndexChanged.connect(self.update_columns)
+        layout.addWidget(self.dataset_dropdown)
+
+        # X Column selection
+        layout.addWidget(QLabel("X Column:"))
+        self.x_column_dropdown = QComboBox()
+        layout.addWidget(self.x_column_dropdown)
+
+        # Y Column selection
+        layout.addWidget(QLabel("Y Column:"))
+        self.y_column_dropdown = QComboBox()
+        layout.addWidget(self.y_column_dropdown)
+
+        # Legend Label
+        layout.addWidget(QLabel("Legend Label:"))
+        self.legend_label_input = QLineEdit()
+        layout.addWidget(self.legend_label_input)
+
+        # Remove Dataset Checkbox
+        self.remove_checkbox = QCheckBox("Remove")
+        layout.addWidget(self.remove_checkbox)
+
+        self.setLayout(layout)
+
+        # Now populate datasets after initializing all widgets
+        self.populate_datasets()
+
+    def populate_datasets(self):
+        data_files = self.general_tab.selected_data_panel.get_selected_files()
+        self.dataset_dropdown.clear()
+        for file in data_files:
+            file_name = os.path.basename(file)
+            self.dataset_dropdown.addItem(file_name, userData=file)
+        if self.dataset_dropdown.count() > 0:
+            self.dataset_dropdown.setCurrentIndex(0)
+            self.update_columns()
+
+    def update_columns(self):
+        dataset_index = self.dataset_dropdown.currentIndex()
+        dataset_path = self.dataset_dropdown.itemData(dataset_index)
+        if not dataset_path:
+            return
+        try:
+            df = pd.read_csv(dataset_path)
+            columns = df.columns.tolist()
+            self.x_column_dropdown.clear()
+            self.y_column_dropdown.clear()
+            for idx, col in enumerate(columns, start=1):
+                display_text = f"{idx}: {col}"
+                self.x_column_dropdown.addItem(display_text, userData=idx - 1)
+                self.y_column_dropdown.addItem(display_text, userData=idx - 1)
+            if self.x_column_dropdown.count() > 0:
+                self.x_column_dropdown.setCurrentIndex(0)  # Set first column as default for X
+            if self.y_column_dropdown.count() > 1:
+                self.y_column_dropdown.setCurrentIndex(1)  # Set second column as default for Y
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to load columns from {dataset_path}: {e}")
+
+
+    def get_config(self):
+        config = {}
+        config['dataset'] = self.dataset_dropdown.currentData()
+        config['x_column'] = self.x_column_dropdown.currentData()
+        config['y_column'] = self.y_column_dropdown.currentData()
+        config['legend_label'] = self.legend_label_input.text() or os.path.splitext(os.path.basename(config['dataset']))[0]
+        return config
