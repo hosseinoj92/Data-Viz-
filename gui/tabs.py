@@ -319,6 +319,10 @@ class GeneralTab(QWidget):
             for text_item in self.text_items:
                 ax.add_artist(text_item)
 
+        # Initialize annotations list for the main axes
+        if not hasattr(ax, 'annotations'):
+            ax.annotations = []
+
         self.canvas.draw_idle()
         print("GeneralTab: plot_updated signal emitted") 
         self.plot_updated.emit()
@@ -397,91 +401,127 @@ class GeneralTab(QWidget):
             print("self.expanded_window has been reset to None.")
         
     def on_click(self, event):
-        if self.plot_type != "2D":
+        if event.inaxes is None:
             return
 
+        ax = event.inaxes
+
+        # Get annotation type from the main CustomAnnotationsPanel
         annotation_type = self.custom_annotations_panel.get_annotation_type()
-        if annotation_type == "Annotation Point":
-            self.add_annotation_point(event)
-        elif annotation_type == "Vertical Line":
-            self.add_vertical_line(event)
-        elif annotation_type == "Horizontal Line":
-            self.add_horizontal_line(event)
-        elif annotation_type == "None":
-            self.select_line(event)
+
+        # Apply annotations to this axes (subplot or main plot)
+        self.apply_annotation(ax, event, annotation_type)
+
+
+
 
     def on_mouse_move(self, event):
-        if self.plot_type != "2D" or not self.annotation_mode:
+        if event.inaxes is None:
+            return
+
+        ax = event.inaxes
+
+        # Get annotation type from the main CustomAnnotationsPanel
+        annotation_type = self.custom_annotations_panel.get_annotation_type()
+
+        if annotation_type not in ['Vertical Line', 'Horizontal Line']:
             return
 
         if self.temp_annotation:
             self.temp_annotation.remove()
             self.temp_annotation = None
 
-        if self.annotation_mode == 'vline':
-            self.temp_annotation = self.figure.gca().axvline(x=event.xdata, color='r', linestyle='--')
-        elif self.annotation_mode == 'hline':
-            self.temp_annotation = self.figure.gca().axhline(y=event.ydata, color='b', linestyle='--')
+        if annotation_type == 'Vertical Line':
+            if event.xdata is not None:
+                self.temp_annotation = ax.axvline(x=event.xdata, color='r', linestyle='--')
+        elif annotation_type == 'Horizontal Line':
+            if event.ydata is not None:
+                self.temp_annotation = ax.axhline(y=event.ydata, color='b', linestyle='--')
 
         self.canvas.draw_idle()
 
-    def add_annotation_point(self, event):
+
+    def apply_annotation(self, ax, event, annotation_type):
+        if annotation_type == "Annotation Point":
+            self.add_annotation_point(ax, event)
+        elif annotation_type == "Vertical Line":
+            self.add_vertical_line(ax, event)
+        elif annotation_type == "Horizontal Line":
+            self.add_horizontal_line(ax, event)
+        elif annotation_type == "None":
+            self.select_line(ax, event)
+
+    def add_annotation_point(self, ax, event):
         if event.xdata is None or event.ydata is None:
             return
-        star, = self.figure.gca().plot(event.xdata, event.ydata, marker='*', color='black', markersize=10)
-        text = self.figure.gca().text(event.xdata, event.ydata, f'({event.xdata:.2f}, {event.ydata:.2f})', fontsize=10, color='black', ha='left')
-        self.annotations.append((star, text))
+        star, = ax.plot(event.xdata, event.ydata, marker='*', color='black', markersize=10)
+        text = ax.text(event.xdata, event.ydata, f'({event.xdata:.2f}, {event.ydata:.2f})', fontsize=10, color='black', ha='left')
+        # Store annotations per axes
+        if not hasattr(ax, 'annotations'):
+            ax.annotations = []
+        ax.annotations.append((star, text))
         self.canvas.draw_idle()
 
-    def add_vertical_line(self, event):
+
+
+    def add_vertical_line(self, ax, event):
         if event.xdata is None:
             return
-        line = self.figure.gca().axvline(x=event.xdata, color='r', linestyle='--')
-        self.annotations.append(line)
+        line = ax.axvline(x=event.xdata, color='r', linestyle='--')
+        if not hasattr(ax, 'annotations'):
+            ax.annotations = []
+        ax.annotations.append(line)
         self.canvas.draw_idle()
 
-    def add_horizontal_line(self, event):
+
+    def add_horizontal_line(self, ax, event):
         if event.ydata is None:
             return
-        line = self.figure.gca().axhline(y=event.ydata, color='b', linestyle='--')
-        self.annotations.append(line)
+        line = ax.axhline(y=event.ydata, color='b', linestyle='--')
+        if not hasattr(ax, 'annotations'):
+            ax.annotations = []
+        ax.annotations.append(line)
         self.canvas.draw_idle()
+
+
 
     def apply_changes(self):
         self.annotation_mode = None
         self.temp_annotation = None
+        # Reset annotation type in the main CustomAnnotationsPanel
         self.custom_annotations_panel.annotation_type_combo.setCurrentText("None")
         self.canvas.draw_idle()
 
-    def select_line(self, event):
+
+    def select_line(self, ax, event):
         if event.xdata is None or event.ydata is None:
             return
 
-        for ann in self.annotations:
+        for ann in getattr(ax, 'annotations', []):
             if isinstance(ann, plt.Line2D):
                 # Check if it's a vertical line
-                if np.allclose(ann.get_xdata(), [ann.get_xdata()[0]]) and event.inaxes == ann.axes and ann.contains(event)[0]:
+                if np.allclose(ann.get_xdata(), [ann.get_xdata()[0]]) and ann.contains(event)[0]:
                     self.selected_lines.append(ann)
                     if len(self.selected_lines) == 2:
-                        self.calculate_distance()
+                        self.calculate_distance(ax)
                     break
                 # Check if it's a horizontal line
-                elif np.allclose(ann.get_ydata(), [ann.get_ydata()[0]]) and event.inaxes == ann.axes and ann.contains(event)[0]:
+                elif np.allclose(ann.get_ydata(), [ann.get_ydata()[0]]) and ann.contains(event)[0]:
                     self.selected_lines.append(ann)
                     if len(self.selected_lines) == 2:
-                        self.calculate_distance()
+                        self.calculate_distance(ax)
                     break
 
     def start_distance_calculation(self):
         self.selected_lines.clear()
+        # Reset annotation type in the main CustomAnnotationsPanel
         self.custom_annotations_panel.annotation_type_combo.setCurrentText("None")
 
-    def calculate_distance(self):
+    def calculate_distance(self, ax):
         if len(self.selected_lines) < 2:
             return
 
         line1, line2 = self.selected_lines
-        ax = self.figure.gca()
 
         if np.allclose(line1.get_xdata(), [line1.get_xdata()[0]]) and np.allclose(line2.get_xdata(), [line2.get_xdata()[0]]):  # Both lines are vertical
             x1 = line1.get_xdata()[0]
@@ -489,11 +529,14 @@ class GeneralTab(QWidget):
             dist = abs(x2 - x1)
 
             # Draw a horizontal arrow between the lines
-            arrow = ax.annotate(f'd = {dist:.2f}', xy=((x1 + x2) / 2, ax.get_ylim()[1] - (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.05),
-                                xytext=((x1 + x2) / 2, ax.get_ylim()[1] - (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.05),
-                                arrowprops=dict(facecolor='black', arrowstyle='<->', lw=1.5),
-                                ha='center', va='center')
-            self.annotations.append(arrow)
+            arrow = ax.annotate(
+                f'd = {dist:.2f}',
+                xy=((x1 + x2) / 2, ax.get_ylim()[1] - (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.05),
+                xytext=((x1 + x2) / 2, ax.get_ylim()[1] - (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.05),
+                arrowprops=dict(facecolor='black', arrowstyle='<->', lw=1.5),
+                ha='center', va='center'
+            )
+            ax.annotations.append(arrow)
 
         elif np.allclose(line1.get_ydata(), [line1.get_ydata()[0]]) and np.allclose(line2.get_ydata(), [line2.get_ydata()[0]]):  # Both lines are horizontal
             y1 = line1.get_ydata()[0]
@@ -501,11 +544,14 @@ class GeneralTab(QWidget):
             dist = abs(y2 - y1)
 
             # Draw a vertical arrow between the lines
-            arrow = ax.annotate(f'd = {dist:.2f}', xy=(ax.get_xlim()[0] + (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.05, (y1 + y2) / 2),
-                                xytext=(ax.get_xlim()[0] + (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.05, (y1 + y2) / 2),
-                                arrowprops=dict(facecolor='black', arrowstyle='<->', lw=1.5),
-                                ha='center', va='center', rotation=90)
-            self.annotations.append(arrow)
+            arrow = ax.annotate(
+                f'd = {dist:.2f}',
+                xy=(ax.get_xlim()[0] + (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.05, (y1 + y2) / 2),
+                xytext=(ax.get_xlim()[0] + (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.05, (y1 + y2) / 2),
+                arrowprops=dict(facecolor='black', arrowstyle='<->', lw=1.5),
+                ha='center', va='center', rotation=90
+            )
+            ax.annotations.append(arrow)
 
         self.selected_lines.clear()
         self.canvas.draw_idle()
@@ -569,12 +615,13 @@ class GeneralTab(QWidget):
     def open_subplots_config_dialog(self):
         dialog = SubplotsConfigDialog(self)  # Pass self (GeneralTab) as parent
         if dialog.exec_() == QDialog.Accepted:
-            self.subplot_configs = dialog.get_subplot_configs()
+            self.subplot_widgets = dialog.subplot_configs  # Keep the widgets
+            self.subplot_configs_data = dialog.get_subplot_configs()  # Get the configs (dicts)
             self.layout_settings = dialog.get_layout_settings()
             self.update_plot_with_subplots()
 
     def update_plot_with_subplots(self):
-        if not hasattr(self, 'subplot_configs') or not self.subplot_configs:
+        if not hasattr(self, 'subplot_configs_data') or not self.subplot_configs_data:
             self.update_plot()  # Use existing plotting if no subplots are configured
             return
 
@@ -583,7 +630,7 @@ class GeneralTab(QWidget):
 
         # Determine the layout based on user settings
         if self.layout_settings['auto_layout']:
-            num_subplots = len(self.subplot_configs)
+            num_subplots = len(self.subplot_configs_data)
             cols = int(np.ceil(np.sqrt(num_subplots)))
             rows = int(np.ceil(num_subplots / cols))
         else:
@@ -593,51 +640,80 @@ class GeneralTab(QWidget):
         # Set figure size based on the number of rows and columns
         self.figure.set_size_inches(5 * cols, 4 * rows)
 
-        # Create subplots without specifying figsize again
+        # Create subplots
         try:
-            axes = self.figure.subplots(rows, cols)
+            axes = self.figure.subplots(rows, cols, squeeze=False)
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to create subplots: {e}")
             return
 
         # Flatten the axes array for easy iteration
-        if rows == 1 and cols == 1:
-            axes = [axes]
-        elif rows == 1 or cols == 1:
-            axes = axes.flatten()
-        else:
-            axes = axes.flatten()
+        axes = axes.flatten()
 
         # Iterate through each subplot configuration
-        for idx, config in enumerate(self.subplot_configs):
+        for idx, config in enumerate(self.subplot_configs_data):
             if idx >= len(axes):
                 break  # Prevent index out of range if more subplots are configured than available axes
 
             ax = axes[idx]
             try:
-                print(f"Subplot {idx + 1} Config: {config}")  # Debug statement
+                # No need to call get_config(), config is already a dict
+                # Apply advanced options
+                advanced_options = config.get('advanced_options', {})
+                line_style = {
+                    'Solid': '-',
+                    'Dashed': '--',
+                    'Dash-Dot': '-.'
+                }.get(advanced_options.get('line_style', 'Solid'), '-')
+                point_style = {
+                    'None': '',
+                    'Circle': 'o',
+                    'Square': 's',
+                    'Triangle Up': '^',
+                    'Triangle Down': 'v',
+                    'Star': '*',
+                    'Plus': '+',
+                    'Cross': 'x'
+                }.get(advanced_options.get('point_style', 'None'), '')
+                line_thickness = int(advanced_options.get('line_thickness', 2))
+                scale_type = advanced_options.get('scale_type', 'Linear')
 
-                # Iterate through each dataset in the subplot
+                # Plot datasets
                 for dataset_config in config['datasets']:
-                    print(f"  Dataset Config: {dataset_config}")  # Debug statement
-
                     df = pd.read_csv(dataset_config['dataset'])
                     x = df.iloc[:, dataset_config['x_column']]
                     y = df.iloc[:, dataset_config['y_column']]
                     label = dataset_config['legend_label']
-                    ax.plot(x, y, label=label, linewidth=2)
+                    ax.plot(
+                        x, y, label=rf"{label}",
+                        linestyle=line_style,
+                        marker=point_style,
+                        linewidth=line_thickness
+                    )
 
-                # Set axis labels
-                ax.set_xlabel(config.get('x_axis_label', ''), fontsize=12)
-                ax.set_ylabel(config.get('y_axis_label', ''), fontsize=12)
+                # Set axis labels with LaTeX rendering
+                ax.set_xlabel(rf"{config.get('x_axis_label', '')}", fontsize=12)
+                ax.set_ylabel(rf"{config.get('y_axis_label', '')}", fontsize=12)
 
-                # Set subplot title with customizable font size
-                ax.set_title(config.get('subplot_title', f"Subplot {idx + 1}"), fontsize=config.get('title_font_size', 14))
+                # Set subplot title with customizable font size and LaTeX
+                ax.set_title(rf"{config.get('subplot_title', f'Subplot {idx + 1}')}", fontsize=config.get('title_font_size', 14))
+
+                # Set scale type
+                x_scale = 'linear'
+                y_scale = 'linear'
+                if scale_type == 'Logarithmic X-Axis':
+                    x_scale = 'log'
+                elif scale_type == 'Logarithmic Y-Axis':
+                    y_scale = 'log'
+                elif scale_type == 'Logarithmic Both Axes':
+                    x_scale = 'log'
+                    y_scale = 'log'
+                ax.set_xscale(x_scale)
+                ax.set_yscale(y_scale)
 
                 # Enable legend if required with customizable font size
                 if config.get('enable_legend'):
                     legend_location = config.get('legend_location', 'best')
-                    print(f"Creating legend for Subplot {idx + 1} at location '{legend_location}'")
                     ax.legend(loc=legend_location, fontsize=config.get('legend_font_size', 10))
                 else:
                     print(f"Legend not enabled for Subplot {idx + 1}")
@@ -645,15 +721,36 @@ class GeneralTab(QWidget):
                 # Enable grid if required
                 if config.get('enable_grid'):
                     print(f"Enabling grid for Subplot {idx + 1}")
+                    ax.minorticks_on()
                     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
-                    ax.minorticks_on()  # Enable minor ticks
                     # Optional: Customize minor tick appearance
                     ax.tick_params(which='minor', length=4, color='gray')
                 else:
                     print(f"Grid not enabled for Subplot {idx + 1}")
 
+                # Initialize annotations list for this subplot
+                if not hasattr(ax, 'annotations'):
+                    ax.annotations = []
+
+                # Store the subplot index in the axes object for event handling
+                ax.subplot_index = idx
+
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"Failed to plot Subplot {idx + 1}: {e}")
+
+        # Hide any unused axes
+        for idx in range(len(self.subplot_configs_data), len(axes)):
+            self.figure.delaxes(axes[idx])
+
+        # Adjust layout for better spacing
+        try:
+            self.figure.tight_layout()
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to adjust layout: {e}")
+
+        # Render the updated plot
+        self.canvas.draw_idle()
+
 
 
 
@@ -1740,7 +1837,7 @@ class SubplotConfigWidget(QWidget):
         super().__init__(parent)
         self.general_tab = general_tab  # Store the GeneralTab reference
 
-        self.legend_location_mapping = {  # Add this mapping
+        self.legend_location_mapping = {
             "Best": "best",
             "Upper Right": "upper right",
             "Upper Left": "upper left",
@@ -1753,6 +1850,8 @@ class SubplotConfigWidget(QWidget):
             "Upper Center": "upper center",
             "Center": "center"
         }
+
+        self.advanced_options = {}  # To store advanced options for this subplot
 
         self.init_ui()
 
@@ -1791,6 +1890,11 @@ class SubplotConfigWidget(QWidget):
         self.y_axis_label_input.setPlaceholderText("Enter Y axis label")
         y_axis_layout.addWidget(self.y_axis_label_input)
         layout.addLayout(y_axis_layout)
+
+        # Advanced Options Button
+        self.advanced_options_button = QPushButton("Advanced Options")
+        self.advanced_options_button.clicked.connect(self.open_advanced_options_dialog)
+        layout.addWidget(self.advanced_options_button)
 
         # Container for multiple DatasetConfigWidgets
         self.datasets_container = QVBoxLayout()
@@ -1846,6 +1950,14 @@ class SubplotConfigWidget(QWidget):
 
         self.setLayout(layout)
 
+    def open_advanced_options_dialog(self):
+        dialog = SubplotAdvancedOptionsDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            # Retrieve the advanced options from the dialog
+            self.advanced_options = dialog.get_advanced_options()
+        else:
+            pass  # Do nothing if canceled
+
     def add_dataset(self):
         dataset_widget = DatasetConfigWidget(self.general_tab, self)
         self.datasets_container.addWidget(dataset_widget)
@@ -1875,6 +1987,9 @@ class SubplotConfigWidget(QWidget):
         config['legend_font_size'] = self.legend_font_size_spinbox.value()
         config['datasets'] = []
 
+        # Add advanced options to config
+        config['advanced_options'] = self.advanced_options  # This will be an empty dict if not set
+
         for i in range(self.datasets_container.count()):
             dataset_widget = self.datasets_container.itemAt(i).widget()
             if dataset_widget:
@@ -1883,7 +1998,7 @@ class SubplotConfigWidget(QWidget):
                     config['datasets'].append(dataset_config)
 
         return config
-        
+
 
 class DatasetConfigWidget(QWidget):
     def __init__(self, general_tab, parent=None):
@@ -1961,5 +2076,72 @@ class DatasetConfigWidget(QWidget):
         config['dataset'] = self.dataset_dropdown.currentData()
         config['x_column'] = self.x_column_dropdown.currentData()
         config['y_column'] = self.y_column_dropdown.currentData()
-        config['legend_label'] = self.legend_label_input.text() or os.path.splitext(os.path.basename(config['dataset']))[0]
+        legend_label = self.legend_label_input.text() or os.path.splitext(os.path.basename(config['dataset']))[0]
+        config['legend_label'] = rf"{legend_label}"  # Use raw string
         return config
+
+
+class SubplotAdvancedOptionsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Advanced Options")
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        # Line Style
+        line_style_layout = QHBoxLayout()
+        line_style_layout.addWidget(QLabel("Line Style:"))
+        self.line_style_combo = QComboBox()
+        self.line_style_combo.addItems(["Solid", "Dashed", "Dash-Dot"])
+        line_style_layout.addWidget(self.line_style_combo)
+        layout.addLayout(line_style_layout)
+
+        # Point Style
+        point_style_layout = QHBoxLayout()
+        point_style_layout.addWidget(QLabel("Point Style:"))
+        self.point_style_combo = QComboBox()
+        self.point_style_combo.addItems(["None", "Circle", "Square", "Triangle Up", "Triangle Down", "Star", "Plus", "Cross"])
+        point_style_layout.addWidget(self.point_style_combo)
+        layout.addLayout(point_style_layout)
+
+        # Line Thickness
+        line_thickness_layout = QHBoxLayout()
+        line_thickness_layout.addWidget(QLabel("Line Thickness:"))
+        self.line_thickness_spinbox = QSpinBox()
+        self.line_thickness_spinbox.setRange(1, 10)
+        self.line_thickness_spinbox.setValue(2)
+        line_thickness_layout.addWidget(self.line_thickness_spinbox)
+        layout.addLayout(line_thickness_layout)
+
+        # Scale Type
+        scale_type_layout = QHBoxLayout()
+        scale_type_layout.addWidget(QLabel("Scale Type:"))
+        self.scale_type_combo = QComboBox()
+        self.scale_type_combo.addItems(["Linear", "Logarithmic X-Axis", "Logarithmic Y-Axis", "Logarithmic Both Axes"])
+        scale_type_layout.addWidget(self.scale_type_combo)
+        layout.addLayout(scale_type_layout)
+
+        # Action Buttons
+        buttons_layout = QHBoxLayout()
+        self.ok_button = QPushButton("OK")
+        self.ok_button.clicked.connect(self.accept)
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.clicked.connect(self.reject)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(self.ok_button)
+        buttons_layout.addWidget(self.cancel_button)
+        layout.addLayout(buttons_layout)
+        
+
+        self.setLayout(layout)
+
+    def get_advanced_options(self):
+        options = {
+            'line_style': self.line_style_combo.currentText(),
+            'point_style': self.point_style_combo.currentText(),
+            'line_thickness': self.line_thickness_spinbox.value(),
+            'scale_type': self.scale_type_combo.currentText()
+        }
+        return options
