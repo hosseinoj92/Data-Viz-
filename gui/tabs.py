@@ -3,10 +3,10 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QGridLayout, QLabel, QToolButton, QScrollArea, QSizePolicy,
     QPushButton, QHBoxLayout, QFrame, QFileDialog, QListWidgetItem, QColorDialog, QTableWidget, QHeaderView, QTableWidgetItem,
-    QMessageBox, QButtonGroup, QGroupBox, QVBoxLayout, QDialog, QComboBox, QSpinBox, QCheckBox, QLineEdit  
+    QMessageBox, QButtonGroup, QGroupBox, QVBoxLayout, QDialog, QComboBox, QSpinBox, QCheckBox, QLineEdit
 
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QEvent
 from PyQt5.QtGui import QIcon
 
 from gui.panels import (
@@ -27,10 +27,6 @@ import seaborn as sns
 from matplotlib import style
 
 ####################################
-
-
-
-# gui/tabs.py
 
 class CollapsibleSection(QWidget):
 
@@ -89,6 +85,8 @@ class GeneralTab(QWidget):
         super().__init__(parent)
         self.init_ui()
         self.expanded_window = None  # To track the expanded window
+        self.canvas.installEventFilter(self)
+
 
     def init_ui(self):
         self.layout = QGridLayout()
@@ -377,6 +375,14 @@ class GeneralTab(QWidget):
         self.data_window.setGeometry(150, 150, 800, 600)
         self.data_window.show()
 
+    def eventFilter(self, obj, event):
+        if obj == self.canvas and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Escape:
+                self.custom_annotations_panel.apply_changes_button.click()
+                return True  # Event handled
+        return super(GeneralTab, self).eventFilter(obj, event)
+
+
     def expand_window(self):
         print("Expand Window button clicked.")
 
@@ -441,6 +447,13 @@ class GeneralTab(QWidget):
                 self.temp_annotation = ax.axhline(y=event.ydata, color='b', linestyle='--')
 
         self.canvas.draw_idle()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.custom_annotations_panel.apply_changes_button.click()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
 
     def apply_annotation(self, ax, event, annotation_type):
