@@ -47,12 +47,13 @@ class LaTeXCompatibilityDialog(QDialog):
         font_size_layout.addWidget(self.font_size_spinbox)
         layout.addLayout(font_size_layout)
 
-        # Font family selection with custom input
+        # Font family selection with specified fonts
         font_family_layout = QHBoxLayout()
         font_family_layout.addWidget(QLabel("Font Family:"))
         self.font_family_combo = QComboBox()
-        self.font_family_combo.setEditable(True)  # Allow custom input
+        self.font_family_combo.setEditable(False)  # Prevent manual input
 
+        # Add the specified fonts
         self.font_family_combo.addItems([
             "Times New Roman",
             "Arial",
@@ -65,7 +66,6 @@ class LaTeXCompatibilityDialog(QDialog):
             "Lucida Sans",
             "Segoe UI"
         ])
-
         self.font_family_combo.setCurrentText("Times New Roman")  # Set default font
         font_family_layout.addWidget(self.font_family_combo)
         layout.addLayout(font_family_layout)
@@ -124,7 +124,13 @@ class LaTeXCompatibilityDialog(QDialog):
         # Additional validations can be added here (e.g., font sizes)
         return True
 
-    def get_latex_options(self):
+    def get_values(self):
+        """
+        Retrieves the LaTeX compatibility settings entered by the user.
+
+        Returns:
+            dict: A dictionary containing the LaTeX compatibility options.
+        """
         try:
             figure_width = float(self.figure_width_input.text())
         except ValueError:
