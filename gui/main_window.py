@@ -15,7 +15,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Data Viz Pro - version 2.1.1")
+        self.setWindowTitle("Data Wz Pro - version 2.4.2")
         self.setGeometry(100, 100, 1200, 800)
         self.setWindowIcon(QIcon('gui/resources/icon.png'))  # Set the window icon
 

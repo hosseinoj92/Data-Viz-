@@ -48,7 +48,7 @@ class SplashScreen(QWidget):
         self.overlay_layout.addWidget(self.logo_label)
 
         # Main text label
-        self.main_text_label = QLabel("Data Viz Pro", self)
+        self.main_text_label = QLabel("Data Wiz Pro", self)
         self.main_text_label.setFont(QFont("Segoe UI", 24, QFont.Bold))
         self.main_text_label.setStyleSheet("color: white;")
         self.main_text_label.setAlignment(Qt.AlignCenter)
@@ -62,7 +62,7 @@ class SplashScreen(QWidget):
         self.overlay_layout.addWidget(self.sub_text_label)
 
         # Sub text label
-        self.sub_text_label = QLabel("Version 2.1.1", self)
+        self.sub_text_label = QLabel("Version 2.4.2", self)
         self.sub_text_label.setFont(QFont("Segoe UI", 12))
         self.sub_text_label.setStyleSheet("color: white;")
         self.sub_text_label.setAlignment(Qt.AlignCenter)
