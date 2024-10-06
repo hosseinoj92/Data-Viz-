@@ -14,6 +14,7 @@ from gui.panels import (
     CustomAnnotationsPanel, PlotVisualsPanel, PlotDetailsPanel, NormalizationMethodPanel
 )
 from plots.plotting import plot_data
+from gui.latex_compatibility_dialog import LaTeXCompatibilityDialog 
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
@@ -21,10 +22,15 @@ import pandas as pd
 import os
 import numpy as np
 import matplotlib.text
-from gui.expanded_plot_window import ExpandedPlotWindow  # Ensure this import is correct
+from gui.expanded_plot_window import ExpandedPlotWindow 
 from gui.save_plot_dialog import SavePlotDialog
 import seaborn as sns
 from matplotlib import style
+from matplotlib import font_manager as fm
+import sys
+from fontTools.ttLib import TTFont
+
+
 
 ####################################
 
@@ -165,7 +171,7 @@ class GeneralTab(QWidget):
         self.configure_subplots_button = QPushButton("Configure Subplots")  
         self.configure_subplots_button.setIcon(QIcon('gui/resources/configure_subplots_icon.png')) 
         self.configure_subplots_button.clicked.connect(self.open_subplots_config_dialog)  
-       
+
 
         self.plot_buttons_layout = QHBoxLayout()
         self.plot_buttons_layout.addWidget(self.update_button)
@@ -216,7 +222,7 @@ class GeneralTab(QWidget):
         configure_subplots_icon_path = os.path.join(os.path.dirname(__file__), 'resources', 'configure_subplots_icon.png')  # New
         if os.path.exists(configure_subplots_icon_path):  # New
             self.configure_subplots_button.setIcon(QIcon(configure_subplots_icon_path))  # New
-        else:  # New
+        else:  
             print(f"Warning: Configure Subplots icon not found at {configure_subplots_icon_path}")  # New
    
     def connect_signals(self):
@@ -235,7 +241,7 @@ class GeneralTab(QWidget):
     # Include all other methods (choose_files, add_files, update_plot, etc.)
     # These methods are similar to those in the original main_window.py
     # Ensure all methods are properly implemented as in the previous code
-        self.expand_button.clicked.connect(self.expand_window)
+        #self.expand_button.clicked.connect(self.expand_window)
 
     def choose_files(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Select Files", self.last_directory, "CSV Files (*.csv);;All Files (*)")
@@ -323,9 +329,15 @@ class GeneralTab(QWidget):
         if not hasattr(ax, 'annotations'):
             ax.annotations = []
 
+        # Call the plot_data function
+        plot_data(
+            self.figure, data_files, plot_details,
+            axis_details, plot_visuals, is_3d=(self.plot_type == "3D")
+        )
+
         self.canvas.draw_idle()
-        print("GeneralTab: plot_updated signal emitted") 
-        self.plot_updated.emit()
+        #print("GeneralTab: plot_updated signal emitted") 
+        #self.plot_updated.emit()
 
     def plot_2d(self):
         self.plot_type = "2D"
@@ -622,17 +634,46 @@ class GeneralTab(QWidget):
             # Handle other style parameters as needed
 
 
+    def apply_font_settings(self, font_family, title_font_size, axis_font_size):
+        for ax in self.figure.axes:
+            # Update titles
+            ax.title.set_fontsize(title_font_size)
+            ax.title.set_fontfamily(font_family)
+
+            # Update axis labels
+            ax.xaxis.label.set_fontsize(axis_font_size)
+            ax.xaxis.label.set_fontfamily(font_family)
+            ax.yaxis.label.set_fontsize(axis_font_size)
+            ax.yaxis.label.set_fontfamily(font_family)
+
+            # Update tick labels
+            for label in ax.get_xticklabels() + ax.get_yticklabels():
+                label.set_fontsize(axis_font_size)
+                label.set_fontfamily(font_family)
+
+            # Update legend
+            legend = ax.get_legend()
+            if legend:
+                for text in legend.get_texts():
+                    text.set_fontsize(axis_font_size)
+                    text.set_fontfamily(font_family)
+
+            # Update annotations
+            for child in ax.get_children():
+                if isinstance(child, matplotlib.text.Annotation):
+                    child.set_fontsize(axis_font_size)
+                    child.set_fontfamily(font_family)
 
     def save_plot_with_options(self):
         print("Save Plot button clicked.")
         dialog = SavePlotDialog(self)
         if dialog.exec_() == QDialog.Accepted:
-            width_pixels, height_pixels, quality = dialog.get_values()
+            width_pixels, height_pixels, quality, latex_options = dialog.get_values()
             print(f"Saving plot with width: {width_pixels}px, height: {height_pixels}px, quality: {quality}")
-            self.save_plot(width_pixels, height_pixels, quality)
-            
-    def save_plot(self, width_pixels, height_pixels, quality):
-    # Map quality to dpi
+            self.save_plot(width_pixels, height_pixels, quality, latex_options)
+
+    def save_plot(self, width_pixels, height_pixels, quality, latex_options):
+        # Map quality to dpi
         quality_dpi_mapping = {
             "Low": 72,
             "Medium": 150,
@@ -640,45 +681,98 @@ class GeneralTab(QWidget):
             "Very High": 600
         }
         dpi = quality_dpi_mapping.get(quality, 150)  # Default to 150 DPI if not found
-        
-        # Keep the figure size in inches based on width and height
-        width_in = width_pixels / 100  # Convert pixels to "figure inches" (for matplotlib size control)
-        height_in = height_pixels / 100  # Same conversion
-        
-        # Store original figure size and DPI
+
+        # Convert pixels to inches (assuming 100 pixels = 1 inch for simplicity)
+        width_in = width_pixels / 100
+        height_in = height_pixels / 100
+
+        # Store original figure size, DPI, and rcParams
         original_size = self.figure.get_size_inches()
         original_dpi = self.figure.get_dpi()
+        original_rcparams = plt.rcParams.copy()
 
-        # Set the figure size to the new dimensions in inches
-        self.figure.set_size_inches(width_in, height_in)
-        
-        # Define the file path
-        options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, 
-            "Save Plot", 
-            "", 
-            "PNG Files (*.png);;JPEG Files (*.jpg);;All Files (*)", 
-            options=options
-        )
-        if file_path:
-            try:
-                # Save the figure with the specified DPI, affecting only the quality (sharpness) not the size
-                self.figure.savefig(file_path, dpi=dpi)
-                QMessageBox.information(self, "Save Successful", f"Plot saved successfully at:\n{file_path}")
-                print(f"Plot saved successfully at: {file_path}")
-            except Exception as e:
-                QMessageBox.warning(self, "Save Failed", f"Failed to save plot:\n{e}")
-                print(f"Failed to save plot: {e}")
-        
-        # Restore original figure size and DPI after saving to avoid affecting the interactive plot
-        self.figure.set_size_inches(original_size)
-        self.figure.set_dpi(original_dpi)
-        
-        # Redraw the canvas to make sure the interactive plot looks normal after saving
-        self.canvas.draw_idle()
-        print("Figure size and DPI restored to original after saving.")
+        try:
+            # Apply LaTeX settings if provided
+            if latex_options:
+                selected_font = latex_options['font_family']
+                print(f"Selected font: '{selected_font}'")
 
+                # Set figure size based on LaTeX settings
+                width_unit = latex_options['width_unit']
+                figure_width = latex_options['figure_width']
+                if width_unit == 'inches':
+                    width_in_inches = figure_width
+                elif width_unit == 'cm':
+                    width_in_inches = figure_width / 2.54
+                elif width_unit == 'mm':
+                    width_in_inches = figure_width / 25.4
+                elif width_unit == 'pt':
+                    width_in_inches = figure_width / 72.27
+                elif width_unit == 'textwidth fraction':
+                    # Assume standard LaTeX textwidth is 6.5 inches
+                    width_in_inches = figure_width * 6.5
+                else:
+                    width_in_inches = figure_width  # Default to inches
+
+                # Set figure size and DPI
+                self.figure.set_size_inches(width_in_inches, self.figure.get_size_inches()[1])
+                self.figure.set_dpi(latex_options['dpi'])
+
+                # Update rcParams for font settings
+                plt.rcParams.update({
+                    'font.size': latex_options['base_font_size'],
+                    'font.family': selected_font,
+                })
+
+                if latex_options['use_latex']:
+                    plt.rcParams.update({
+                        'text.usetex': True,
+                        'font.family': selected_font,
+                    })
+                else:
+                    plt.rcParams.update({'text.usetex': False})
+
+                # Apply font settings to plot titles and axis labels
+                self.apply_font_settings(
+                    selected_font,
+                    latex_options['title_font_size'],
+                    latex_options['axis_font_size']
+                )
+            else:
+                # If no LaTeX settings, apply the user-specified image size and quality
+                self.figure.set_size_inches(width_in, height_in)
+                self.figure.set_dpi(dpi)
+
+            # Define the file path
+            options = QFileDialog.Options()
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, 
+                "Save Plot", 
+                "", 
+                "PNG Files (*.png);;JPEG Files (*.jpg);;All Files (*)", 
+                options=options
+            )
+            if file_path:
+                try:
+                    # Save the figure with the specified DPI
+                    self.figure.savefig(file_path, dpi=dpi)
+                    QMessageBox.information(self, "Save Successful", f"Plot saved successfully at:\n{file_path}")
+                    print(f"Plot saved successfully at: {file_path}")
+                except Exception as e:
+                    QMessageBox.warning(self, "Save Failed", f"Failed to save plot:\n{e}")
+                    print(f"Failed to save plot: {e}")
+
+        finally:
+            # Restore original figure size, DPI, and rcParams to keep the interactive plot unaffected
+            self.figure.set_size_inches(original_size)
+            self.figure.set_dpi(original_dpi)
+            plt.rcParams.update(original_rcparams)
+
+            # Redraw the canvas to reflect original settings
+            self.canvas.draw_idle()
+            print("Figure size, DPI, and rcParams restored to original after saving.")
+
+        
     def open_subplots_config_dialog(self):
         dialog = SubplotsConfigDialog(self)  # Pass self (GeneralTab) as parent
         if dialog.exec_() == QDialog.Accepted:
@@ -688,6 +782,10 @@ class GeneralTab(QWidget):
             self.update_plot_with_subplots()
 
     def update_plot_with_subplots(self):
+
+        # Store current rcParams
+        original_rcparams = plt.rcParams.copy()
+
         if not hasattr(self, 'subplot_configs_data') or not self.subplot_configs_data:
             self.update_plot()  # Use existing plotting if no subplots are configured
             return
@@ -751,6 +849,11 @@ class GeneralTab(QWidget):
                 # Apply style parameters to the axes
                 self.apply_style_to_axes(ax, style_dict)
 
+                 # Apply LaTeX options if they exist
+                latex_options = config.get('latex_options', None)
+                if latex_options:
+                    self.apply_latex_compatibility_to_axes(ax, latex_options)  
+
                 # Plot datasets
                 for dataset_config in config['datasets']:
                     df = pd.read_csv(dataset_config['dataset'])
@@ -810,6 +913,8 @@ class GeneralTab(QWidget):
 
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"Failed to plot Subplot {idx + 1}: {e}")
+            # **Restore original rcParams if needed**
+        plt.rcParams.update(original_rcparams)
 
         # Hide any unused axes
         for idx in range(len(self.subplot_configs_data), len(axes)):
@@ -823,7 +928,6 @@ class GeneralTab(QWidget):
 
         # Render the updated plot
         self.canvas.draw_idle()
-
 
 
 
@@ -2065,7 +2169,14 @@ class SubplotConfigWidget(QWidget):
         config['datasets'] = []
 
         # Include advanced options
-        config['advanced_options'] = self.advanced_options  # Add this line
+        config['advanced_options'] = self.advanced_options  
+        config['advanced_options'] = self.advanced_options
+
+        # Include LaTeX options if they exist
+        if hasattr(self, 'latex_options'):
+            config['latex_options'] = self.latex_options  
+        else:
+            config['latex_options'] = None  
 
         for i in range(self.datasets_container.count()):
             dataset_widget = self.datasets_container.itemAt(i).widget()

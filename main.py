@@ -61,7 +61,7 @@ def main():
     progress_timer.timeout.connect(update_progress)
     progress_timer.start(100)  # Update progress every 100 ms
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec_()) 
 
 if __name__ == "__main__":
     main()
