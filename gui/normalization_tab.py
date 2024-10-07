@@ -1,12 +1,9 @@
-
 # normalization_tab.py
-
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QGridLayout, QLabel, QToolButton, QScrollArea, QSizePolicy,
     QPushButton, QHBoxLayout, QFrame, QFileDialog, QListWidgetItem, QColorDialog, QTableWidget, QHeaderView, QTableWidgetItem,
     QMessageBox, QButtonGroup, QGroupBox, QVBoxLayout, QDialog, QComboBox, QSpinBox, QCheckBox, QLineEdit
-
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QEvent
 from PyQt5.QtGui import QIcon
@@ -479,8 +476,8 @@ class NormalizationTab(QWidget):
 
                 # Create dataframe to save
                 df = pd.DataFrame({
-                    self.plot_details_panel.get_plot_details()['x_axis_label']: x,
-                    self.plot_details_panel.get_plot_details()['y_axis_label']: y_normalized
+                    self.plot_details_panel.get_plot_details()['x_label']: x,
+                    self.plot_details_panel.get_plot_details()['y_label']: y_normalized
                 })
 
                 df.to_csv(new_file_path, index=False)
@@ -604,7 +601,7 @@ class NormalizationTab(QWidget):
         if self.is_collapsing:
             return
         self.is_collapsing = True
-        # Collapse other normalization sections
+        # When a section is expanded, collapse all other sections
         for section in self.normalization_sections:
             if section != expanded_section and section.toggle_button.isChecked():
                 section.toggle_button.setChecked(False)
@@ -676,10 +673,10 @@ class NormalizationTab(QWidget):
         self.selected_data_panel.select_all_button.setText("Deselect All" if select_all else "Select All")
 
     def retract_from_general(self):
-        # **Access the General Tab's SelectedDataPanel**  # Add this one
+        # **Access the General Tab's SelectedDataPanel**
         general_selected_data_panel = self.general_tab.selected_data_panel
 
-        # **Retrieve selected files from the General Tab**  # Add this one
+        # **Retrieve selected files from the General Tab**
         selected_items = [
             item for item in general_selected_data_panel.selected_files_list.findItems("*", Qt.MatchWildcard)
             if item.checkState() == Qt.Checked
@@ -689,22 +686,24 @@ class NormalizationTab(QWidget):
             QMessageBox.warning(self, "No Data Selected", "No files are selected in the General Tab.")
             return
 
-        # **Clear the current selection in the Normalization Tab's SelectedDataPanel**  # Add this one
-        self.selected_data_panel.selected_files_list.clear()
-
-        # **Copy selected items from General Tab to Normalization Tab**  # Add this one
+        # **Add selected files from General Tab to Normalization Tab without clearing existing files**
+        added_files = []
         for item in selected_items:
             file_path = item.data(Qt.UserRole)
-            file_name = os.path.basename(file_path)
+            # Use the add_file_to_panel method to handle duplicates
+            self.selected_data_panel.add_file_to_panel(file_path)
+            # After adding, find the item and set it as checked
+            for i in range(self.selected_data_panel.selected_files_list.count()):
+                norm_item = self.selected_data_panel.selected_files_list.item(i)
+                if norm_item.data(Qt.UserRole) == file_path:
+                    norm_item.setCheckState(Qt.Checked)
+                    added_files.append(file_path)
+                    break
 
-            new_item = QListWidgetItem(file_name)
-            new_item.setFlags(new_item.flags() | Qt.ItemIsUserCheckable)
-            new_item.setCheckState(Qt.Checked)  # Set as checked
-            new_item.setData(Qt.UserRole, file_path)
-
-            self.selected_data_panel.selected_files_list.addItem(new_item)
-
-        QMessageBox.information(self, "Retract Successful", "Selected files have been retracted from the General Tab.")
+        if added_files:
+            QMessageBox.information(self, "Retract Successful", f"Added {len(added_files)} file(s) to the Normalization Tab.")
+        else:
+            QMessageBox.information(self, "No New Files", "No new files were added (they may already exist).")
     
     def delete_selected_file(self):
         selected_items = self.selected_data_panel.selected_files_list.selectedItems()
@@ -955,7 +954,7 @@ class NormalizationTab(QWidget):
             self.save_plot(width_pixels, height_pixels, quality)
 
     def save_plot(self, width_pixels, height_pixels, quality):
-    # Map quality to dpi
+        # Map quality to dpi
         quality_dpi_mapping = {
             "Low": 72,
             "Medium": 150,
