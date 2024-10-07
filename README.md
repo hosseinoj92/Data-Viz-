@@ -11,6 +11,11 @@ Data Viz Pro is a Python-based tool for data visualization and interactive plott
 - **Annotations:** Add custom annotations to your plots like vertical and horizontal lines, or point annotations.
 - **Interactive Interface:** A user-friendly interface to update and visualize your plots in real time.
 
+## Icons:
+- All icosn used in this software are downloaded from https://www.flaticon.com/ and their rights belong to them. 
+
+<a href="https://www.flaticon.com/free-icons/filter" title="filter icons">Filter icons created by Eucalyp - Flaticon</a>
+
 ## Requirements
 - Python 3.8+
 - PyQt5

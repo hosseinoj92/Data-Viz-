@@ -9,9 +9,6 @@ from PyQt5.QtCore import QTimer
 from gui.main_window import MainWindow
 from gui.splash_screen import SplashScreen
 
-
- #Define the exception hook
-
 '''def excepthook(exc_type, exc_value, exc_traceback):
     error_message = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
     QMessageBox.critical(None, "An unexpected error occurred", error_message)
