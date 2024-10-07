@@ -29,6 +29,7 @@ from matplotlib import style
 from matplotlib import font_manager as fm
 import sys
 from fontTools.ttLib import TTFont
+from utils import read_numeric_data
 
 ################################################################
 
@@ -775,6 +776,7 @@ class NormalizationTab(QWidget):
         ]
 
         if not selected_items:
+            QMessageBox.warning(self, "No Data Selected", "No files are selected to show data structure.")
             return
 
         # Create a new window to show the data structure
@@ -785,23 +787,26 @@ class NormalizationTab(QWidget):
         for item in selected_items:
             file_path = item.data(Qt.UserRole)
             try:
-                df = pd.read_csv(file_path)
+                df, x, y = self.read_numeric_data(file_path)
+                if df is None:
+                    continue  # Skip files with insufficient or invalid data
+
                 df_head = df.head()
 
                 table = QTableWidget()
                 table.setRowCount(len(df_head))
                 table.setColumnCount(len(df_head.columns))
-                table.setHorizontalHeaderLabels([str(col) for col in df_head.columns])
+                table.setHorizontalHeaderLabels([f"Column {i+1}" for i in range(len(df_head.columns))])
                 table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
                 for i in range(len(df_head)):
                     for j in range(len(df_head.columns)):
                         table.setItem(i, j, QTableWidgetItem(str(df_head.iloc[i, j])))
 
-                self.data_layout.addWidget(QLabel(item.text()))
+                self.data_layout.addWidget(QLabel(f"File: {item.text()}"))
                 self.data_layout.addWidget(table)
             except Exception as e:
-                print(f"Error loading file {file_path}: {e}")
+                QMessageBox.warning(self, "Error", f"Error loading file {file_path}: {e}")
 
         self.data_window.setLayout(self.data_layout)
         self.data_window.setGeometry(150, 150, 800, 600)
@@ -945,6 +950,9 @@ class NormalizationTab(QWidget):
         self.selected_lines.clear()
         self.canvas.draw_idle()
 
+    def read_numeric_data(self, file_path):
+        return read_numeric_data(file_path, parent=self)
+    
     def save_plot_with_options(self):
         print("Save Plot button clicked.")
         dialog = SavePlotDialog(self)

@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
+from utils import read_numeric_data
 
 # Import other necessary components
 from gui.panels import SelectedDataPanel  # Import from existing panels.py
@@ -365,3 +366,6 @@ class DatasetSelectionDialog(QDialog):
     
     def get_selected_datasets(self):
         return self.selected_datasets
+
+    def read_numeric_data(self, file_path):
+        return read_numeric_data(file_path, parent=self)

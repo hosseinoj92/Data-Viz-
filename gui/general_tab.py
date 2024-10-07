@@ -16,6 +16,7 @@ from gui.panels import (
 )
 from plots.plotting import plot_data
 from gui.latex_compatibility_dialog import LaTeXCompatibilityDialog 
+from utils import read_numeric_data
 
 from gui.collapsible_sections import *
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
@@ -194,6 +195,9 @@ class GeneralTab(QWidget):
     # Ensure all methods are properly implemented as in the previous code
         #self.expand_button.clicked.connect(self.expand_window)
 
+    def read_numeric_data(self, file_path):
+        return read_numeric_data(file_path, parent=self)
+
     def choose_files(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Select Files", self.last_directory, "CSV Files (*.csv);;All Files (*)")
         if files:
@@ -306,33 +310,37 @@ class GeneralTab(QWidget):
         ]
 
         if not selected_items:
+            QMessageBox.warning(self, "No Data Selected", "No files are selected to show data structure.")
             return
 
         # Create a new window to show the data structure
         self.data_window = QWidget()
-        self.data_window.setWindowTitle("Data Structure - General Tab")
+        self.data_window.setWindowTitle("Data Structure - Normalization Tab")
         self.data_layout = QVBoxLayout(self.data_window)
 
         for item in selected_items:
             file_path = item.data(Qt.UserRole)
             try:
-                df = pd.read_csv(file_path)
+                df, x, y = self.read_numeric_data(file_path)
+                if df is None:
+                    continue  # Skip files with insufficient or invalid data
+
                 df_head = df.head()
 
                 table = QTableWidget()
                 table.setRowCount(len(df_head))
                 table.setColumnCount(len(df_head.columns))
-                table.setHorizontalHeaderLabels([str(col) for col in df_head.columns])
+                table.setHorizontalHeaderLabels([f"Column {i+1}" for i in range(len(df_head.columns))])
                 table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
                 for i in range(len(df_head)):
                     for j in range(len(df_head.columns)):
                         table.setItem(i, j, QTableWidgetItem(str(df_head.iloc[i, j])))
 
-                self.data_layout.addWidget(QLabel(item.text()))
+                self.data_layout.addWidget(QLabel(f"File: {item.text()}"))
                 self.data_layout.addWidget(table)
             except Exception as e:
-                print(f"Error loading file {file_path}: {e}")
+                QMessageBox.warning(self, "Error", f"Error loading file {file_path}: {e}")
 
         self.data_window.setLayout(self.data_layout)
         self.data_window.setGeometry(150, 150, 800, 600)
